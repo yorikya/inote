@@ -14,7 +14,7 @@ const url = require('url');
 const path = require('path');
 const WebSocket = require('ws');
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 30000;
 
 const NoteManager = require('./NoteManager');
 const CommandRouter = require('./CommandRouter');
@@ -60,6 +60,10 @@ const server = http.createServer((req, res) => {
 });
 
 const wss = new WebSocket.Server({ server });
+
+wss.on('error', (error) => {
+  console.error('WebSocket Server Error:', error);
+});
 
 function send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { console.error('send err', e); } }
 
@@ -174,6 +178,10 @@ wss.on('connection', (ws) => {
   send(ws, { type: 'reply', text: 'Connected to min.js backend' });
 });
 
-server.listen(PORT, () => console.log('min.js backend listening on', PORT));
+server.listen(PORT, () => {
+  const { port } = server.address();
+  console.log(`NODE_PORT=${port}`);
+  console.log(`min.js backend listening on port ${port}`);
+});
 
 module.exports = { server, wss, NoteManager };

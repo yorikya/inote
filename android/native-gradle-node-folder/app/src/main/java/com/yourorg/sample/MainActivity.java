@@ -3,6 +3,7 @@ package com.yourorg.sample;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -44,7 +45,7 @@ public class MainActivity extends AppCompatActivity {
         new Handler().postDelayed(new Runnable() {
             @Override
             public void run() {
-                webView.loadUrl("http://127.0.0.1:3000");
+                webView.loadUrl("http://127.0.0.1:30000");
             }
         }, 2000);
 
@@ -55,18 +56,24 @@ public class MainActivity extends AppCompatActivity {
                 public void run() {
                     // The path where we expect the node project to be at runtime.
                     String nodeDir = getApplicationContext().getFilesDir().getAbsolutePath()+"/nodejs-project";
+                    String wwwDir = getApplicationContext().getFilesDir().getAbsolutePath()+"/www";
                     if (wasAPKUpdated()) {
-                        // Recursively delete any existing nodejs-project.
+                        // Recursively delete any existing nodejs-project and www folders.
                         File nodeDirReference = new File(nodeDir);
                         if (nodeDirReference.exists()) {
                             deleteFolderRecursively(new File(nodeDir));
                         }
+                        File wwwDirReference = new File(wwwDir);
+                        if (wwwDirReference.exists()) {
+                            deleteFolderRecursively(new File(wwwDir));
+                        }
                         // Copy the node project from assets into the application's data path.
                         copyAssetFolder(getApplicationContext().getAssets(), "nodejs-project", nodeDir);
+                        copyAssetFolder(getApplicationContext().getAssets(), "www", wwwDir);
                         saveLastUpdateTime();
                     }
                     startNodeWithArguments(new String[]{"node",
-                            nodeDir+"/main.js"
+                            nodeDir+"/min.js"
                     });
                 }
             }).start();
@@ -137,10 +144,12 @@ public class MainActivity extends AppCompatActivity {
                         toPath);
             } else {
                 new File(toPath).mkdirs();
-                for (String file : files)
-                res &= copyAssetFolder(assetManager,
-                        fromAssetPath + "/" + file,
-                        toPath + "/" + file);
+                for (String file : files) {
+                    Log.d("Copying asset folder", "From: " + fromAssetPath + "/" + file + " To: " + toPath + "/" + file);
+                    res &= copyAssetFolder(assetManager,
+                            fromAssetPath + "/" + file,
+                            toPath + "/" + file);
+                }
             }
             return res;
         } catch (Exception e) {
@@ -153,6 +162,7 @@ public class MainActivity extends AppCompatActivity {
         InputStream in = null;
         OutputStream out = null;
         try {
+            Log.d("Copying asset", "From: " + fromAssetPath + " To: " + toPath);
             in = assetManager.open(fromAssetPath);
             new File(toPath).createNewFile();
             out = new FileOutputStream(toPath);
