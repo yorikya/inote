@@ -1,0 +1,42 @@
+{
+  "stringTable": {},
+  "buildFiles": [
+    "/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/yurikalinin/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja",
+      "-C",
+      "/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/.cxx/cmake/debug/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/yurikalinin/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja",
+    "-C",
+    "/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/.cxx/cmake/debug/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "native-lib-Debug-x86_64": {
+      "buildCommandComponents": [
+        "/Users/yurikalinin/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja",
+        "-C",
+        "/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/.cxx/cmake/debug/x86_64",
+        "native-lib"
+      ],
+      "buildType": "debug",
+      "abi": "x86_64",
+      "artifactName": "native-lib",
+      "output": "/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/build/intermediates/cmake/debug/obj/x86_64/libnative-lib.so",
+      "runtimeFiles": [
+        "/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/libnode/bin/x86_64/libnode.so"
+      ]
+    }
+  },
+  "toolchains": {},
+  "cFileExtensions": [],
+  "cppFileExtensions": [
+    "cpp"
+  ]
+}

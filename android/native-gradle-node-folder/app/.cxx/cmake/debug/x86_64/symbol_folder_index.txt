@@ -1,0 +1,1 @@
+/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/build/intermediates/cmake/debug/obj/x86_64

@@ -1,0 +1,7 @@
+Executable : /Users/yurikalinin/Library/Android/sdk/cmake/3.10.2.4988404/bin/ninja
+arguments : 
+-C
+/Users/yurikalinin/ws/github.com/yorikya/inote/android/native-gradle-node-folder/app/.cxx/cmake/debug/x86_64
+native-lib
+jvmArgs : 
+
