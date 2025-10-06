@@ -49,6 +49,34 @@ android/native-gradle-node-folder/app/libnode/bin/x86_64/libnode.so
 5. Open the Android project in Android Studio. You can import the Gradle project at `android/native-gradle-node-folder/` (or `android/native-gradle/` for the alternate sample). Android Studio will prompt to install missing SDK components (for example: Build Tools 25.0.3 or CMake).
 6. Build & Run the app on a device. The generated APK(s) will be in `app/build/outputs/apk/` under the sample folder you built.
 
+## How to Run
+
+1.  Navigate to the Node.js project directory:
+
+    ```bash
+    cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+    ```
+
+2.  Run the Node.js server:
+
+    ```bash
+    node min.js
+    ```
+
+## How to Build
+
+1.  Navigate to the Android project directory:
+
+    ```bash
+    cd android/native-gradle-node-folder/
+    ```
+
+2.  Run the Gradle build command:
+
+    ```bash
+    ./gradlew assembleDebug
+    ```
+
 Notes & troubleshooting
 - The sample copies the `nodejs-project` folder from assets to the application's FilesDir at runtime and starts the runtime with the path `.../nodejs-project/main.js`. That is why `main.js` must live in `app/src/main/assets/nodejs-project/main.js` before building the APK.
 - If Gradle/Android Studio prompts for SDK build-tools or CMake, install the versions it requests (the sample historically expects Build Tools 25.0.3).

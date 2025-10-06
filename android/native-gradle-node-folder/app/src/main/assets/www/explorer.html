@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Note Explorer – Note Secretary</title>
+<style>
+  body { margin:0; font-family: system-ui, Arial, sans-serif; background:#0b0d10; color:#e6e6e6; }
+  .app { display:flex; flex-direction:column; height:100dvh; max-width:1200px; margin:0 auto; }
+  
+  /* Header Styles */
+  header { padding:12px 16px; border-bottom:1px solid #222; display:flex; gap:8px; align-items:center; background:#1a1d21; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  header .spacer { flex:1; }
+  button { background:#1f6feb; color:white; border:none; border-radius:8px; padding:8px 16px; cursor:pointer; }
+  button.secondary { background:#444; }
+  button:hover { opacity:0.9; }
+  
+  /* Search Bar */
+  .search-container { padding:16px; background:#1a1d21; border-bottom:1px solid #222; }
+  .search-bar { width:100%; max-width:400px; padding:10px 16px; background:#2a2f36; color:#e6e6e6; border:1px solid #444; border-radius:24px; font-size:16px; }
+  .search-bar:focus { outline:none; border-color:#1f6feb; }
+  
+  /* Notes Grid */
+  .notes-container { flex:1; padding:16px; overflow-y:auto; }
+  .notes-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+  
+  /* Note Card Styles */
+  .note-card { background:#1a1d21; border:1px solid #2a2f36; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease; position:relative; }
+  .note-card:hover { border-color:#1f6feb; transform:translateY(-2px); box-shadow:0 4px 12px rgba(31, 111, 235, 0.1); }
+  .note-card.completed { opacity:0.8; }
+  
+  .note-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+  .note-title { font-size:16px; font-weight:600; color:#e6e6e6; line-height:1.3; flex:1; margin-right:8px; }
+  .note-actions { display:flex; align-items:center; gap:8px; }
+  .parent-indicator { background:#1f6feb; color:white; font-size:12px; font-weight:bold; padding:2px 6px; border-radius:4px; }
+  .note-menu-btn { background:none; border:none; color:#a0a0a0; font-size:18px; cursor:pointer; padding:4px; border-radius:4px; transition:all 0.2s ease; }
+  .note-menu-btn:hover { background:#2a2f36; color:#e6e6e6; }
+  .note-description { font-size:14px; color:#a0a0a0; line-height:1.4; margin:0 0 12px 0; max-height:60px; overflow:hidden; }
+  .note-meta { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#666; }
+  .note-id { background:#2a2f36; padding:2px 6px; border-radius:4px; }
+  .note-date { font-size:12px; }
+  .note-status { font-weight:600; }
+  .note-status.completed { color:#4ade80; }
+  .note-status.pending { color:#fbbf24; }
+  
+  /* Sub-notes indicator */
+  .sub-notes { margin-top:8px; padding:8px; background:#2a2f36; border-radius:6px; font-size:12px; color:#a0a0a0; }
+  .sub-notes-count { color:#1f6feb; font-weight:600; }
+  
+  /* Image preview styles */
+  .note-images { 
+    margin: 8px 0; 
+    position: relative; 
+    cursor: pointer;
+  }
+  
+  .image-preview-container {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #2a2f36;
+  }
+  
+  .image-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+  
+  .image-preview-img:hover {
+    transform: scale(1.02);
+  }
+  
+  .image-counter {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  .image-placeholder {
+    width: 100%;
+    height: 120px;
+    border-radius: 6px;
+    background: #2a2f36;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a0a0a0;
+    font-size: 14px;
+    text-align: center;
+    border: 2px dashed #444;
+    box-sizing: border-box;
+    flex-direction: column;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  .image-placeholder:hover {
+    background: #333640;
+  }
+  
+  .image-error {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a0a0a0;
+    font-size: 14px;
+    text-align: center;
+    flex-direction: column;
+    background: #2a2f36;
+    border: 2px dashed #666;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  
+  /* Image rotation styles removed - using static display */
+  
+  .no-images { 
+    text-align: center; 
+    color: #666; 
+    font-size: 12px; 
+    padding: 20px; 
+  }
+  
+  /* Edit menu styles */
+  .edit-menu { position:absolute; top:40px; right:8px; background:#1a1d21; border:1px solid #333; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:1000; min-width:200px; }
+  .edit-menu-item { padding:12px 16px; border-bottom:1px solid #333; cursor:pointer; color:#e6e6e6; font-size:14px; }
+  .edit-menu-item:hover { background:#2a2f36; }
+  .edit-menu-item:last-child { border-bottom:none; }
+  .edit-menu-item.danger { color:#ff6b6b; }
+  
+  /* Image management modal */
+  .image-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; display:none; }
+  .image-modal.show { display:flex; align-items:center; justify-content:center; }
+  .image-modal-content { background:#1a1d21; border-radius:12px; padding:20px; max-width:90%; max-height:90%; overflow-y:auto; }
+  .image-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  .image-modal-title { font-size:18px; font-weight:600; color:#e6e6e6; }
+  .image-modal-close { background:none; border:none; color:#a0a0a0; font-size:24px; cursor:pointer; }
+  .image-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:16px; }
+  .image-item { position:relative; }
+  .image-item img { width:100%; height:120px; object-fit:cover; border-radius:8px; }
+  .image-item-actions { position:absolute; top:8px; right:8px; display:flex; gap:4px; }
+  .image-delete-btn { background:rgba(255,107,107,0.9); color:white; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; }
+  .image-delete-btn:hover { background:rgba(255,107,107,1); }
+  
+  /* Empty State */
+  .empty-state { text-align:center; padding:60px 20px; color:#666; }
+  .empty-state h3 { font-size:18px; margin:0 0 8px 0; }
+  .empty-state p { font-size:14px; margin:0; }
+  
+  /* Side Menu Styles (reused from index.html) */
+  .side-menu { position:fixed; top:0; left:-300px; width:300px; height:100vh; background:#1a1d21; border-right:1px solid #333; z-index:1000; transition:left 0.3s ease; }
+  .side-menu.open { left:0; }
+  .side-menu-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+  .side-menu-content { padding:16px; }
+  .side-menu h2 { margin:0 0 16px 0; font-size:18px; color:#e6e6e6; }
+  .side-menu button { background:#1f6feb; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; margin-right:8px; }
+  .side-menu button.secondary { background:#444; }
+  .side-menu button.nav-button { width:100%; margin:0 0 8px 0; font-size:16px; padding:12px 16px; }
+  .side-menu button.nav-button:disabled { opacity:0.5; cursor:not-allowed; }
+  .side-menu button.nav-button.active { background:#2d5a87; border:2px solid #1f6feb; }
+  .overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; }
+  .overlay.show { display:block; }
+  
+  /* Loading State */
+  .loading { text-align:center; padding:40px; color:#666; }
+  .loading::after { content:''; display:inline-block; width:20px; height:20px; border:2px solid #333; border-top:2px solid #1f6feb; border-radius:50%; animation:spin 1s linear infinite; margin-left:10px; }
+  @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .notes-grid { grid-template-columns:1fr; }
+    .search-bar { max-width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header>
+    <button id="menuBtn">☰</button>
+    <h1>📝 Note Explorer</h1>
+    <div class="spacer"></div>
+    <button id="refreshBtn">🔄 Refresh</button>
+  </header>
+  
+  <!-- Search Bar -->
+  <div class="search-container">
+    <input type="text" id="searchInput" class="search-bar" placeholder="Search notes...">
+  </div>
+  
+  <!-- Notes Container -->
+  <div class="notes-container">
+    <div id="loadingState" class="loading" style="display:none;">Loading notes...</div>
+    <div id="emptyState" class="empty-state" style="display:none;">
+      <h3>No notes found</h3>
+      <p>Create your first note using the Chat interface</p>
+    </div>
+    <div id="notesGrid" class="notes-grid"></div>
+  </div>
+  
+  <!-- Image Management Modal -->
+  <div id="imageModal" class="image-modal">
+    <div class="image-modal-content">
+      <div class="image-modal-header">
+        <h3 class="image-modal-title">Manage Images</h3>
+        <button class="image-modal-close" onclick="closeImageModal()">&times;</button>
+      </div>
+      <div id="imageGrid" class="image-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Side Menu -->
+<div class="overlay" id="overlay"></div>
+<div class="side-menu" id="sideMenu">
+  <div class="side-menu-header">
+    <h2>Navigation</h2>
+    <button id="closeMenu">✕</button>
+  </div>
+  <div class="side-menu-content">
+    <h3>Navigation</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+      <button id="chatButton" class="nav-button">💬 Chat</button>
+      <button id="explorerButton" class="nav-button active">📝 Note Explorer</button>
+    </div>
+    
+    <h3>Filter Options</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+      <button id="showAllBtn" class="nav-button">📋 All Notes</button>
+      <button id="showCompletedBtn" class="nav-button secondary">✅ Completed</button>
+      <button id="showPendingBtn" class="nav-button secondary">⏳ Pending</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Elements
+const menuBtn = document.getElementById("menuBtn");
+const sideMenu = document.getElementById("sideMenu");
+const overlay = document.getElementById("overlay");
+const closeMenu = document.getElementById("closeMenu");
+const searchInput = document.getElementById("searchInput");
+const refreshBtn = document.getElementById("refreshBtn");
+const notesGrid = document.getElementById("notesGrid");
+const loadingState = document.getElementById("loadingState");
+const emptyState = document.getElementById("emptyState");
+
+// Navigation elements
+const chatButton = document.getElementById("chatButton");
+const explorerButton = document.getElementById("explorerButton");
+
+// Filter elements
+const showAllBtn = document.getElementById("showAllBtn");
+const showCompletedBtn = document.getElementById("showCompletedBtn");
+const showPendingBtn = document.getElementById("showPendingBtn");
+
+// State
+let allNotes = [];
+let filteredNotes = [];
+let currentFilter = 'all';
+
+// WebSocket connection
+let ws = null;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  initializeWebSocket();
+  setupEventListeners();
+  loadNotes();
+});
+
+// WebSocket initialization
+function initializeWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Use localhost as fallback if hostname is empty (DroidScript case)
+  const hostname = window.location.hostname || 'localhost';
+  const wsUrl = `${protocol}//${hostname}:8080`;
+  
+  console.log('Connecting to WebSocket:', wsUrl);
+  ws = new WebSocket(wsUrl);
+  
+  ws.onopen = function() {
+    console.log('Connected to WebSocket');
+    // Request all notes
+    ws.send(JSON.stringify({ type: "get_all_notes" }));
+  };
+  
+  ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    handleWebSocketMessage(data);
+  };
+  
+  ws.onclose = function() {
+    console.log('WebSocket connection closed');
+    // Try to reconnect after 3 seconds
+    setTimeout(initializeWebSocket, 3000);
+  };
+  
+  ws.onerror = function(error) {
+    console.error('WebSocket error:', error);
+  };
+}
+
+// Handle WebSocket messages
+function handleWebSocketMessage(data) {
+  switch(data.type) {
+    case 'all_notes':
+      allNotes = validateNoteImages(data.notes || []);
+      applyCurrentFilter();
+      renderNotes();
+      break;
+    case 'note_updated':
+      // Refresh notes when a note is updated
+      loadNotes();
+      break;
+    case 'uri_conversion_success':
+      handleUriConversionSuccess(data);
+      break;
+    case 'uri_conversion_error':
+      break;
+    case 'image_data':
+      handleImageDataReceived(data);
+      break;
+    case 'image_url':
+      handleImageUrlReceived(data);
+      break;
+    case 'image_error':
+      handleImageError(data);
+      break;
+    case 'file_api_test_results':
+      console.log('File API Test Results:', JSON.stringify(data.results, null, 2));
+      break;
+    case 'cleanup_complete':
+      showToast('✅ Broken image link removed');
+      // Refresh the notes to show updated state
+      loadNotes();
+      break;
+    case 'note_created':
+      // Refresh notes when a new note is created
+      loadNotes();
+      break;
+    case 'note_deleted':
+      // Refresh notes when a note is deleted
+      loadNotes();
+      break;
+  }
+}
+
+// Setup event listeners
+function setupEventListeners() {
+  // Side menu
+  menuBtn.onclick = () => {
+    sideMenu.classList.add("open");
+    overlay.classList.add("show");
+  };
+  
+  closeMenu.onclick = () => {
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  };
+  
+  overlay.onclick = () => {
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  };
+  
+  // Navigation
+  chatButton.onclick = () => {
+    window.location.href = 'index.html';
+  };
+  
+  explorerButton.onclick = () => {
+    // Already on explorer page
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  };
+  
+  // Search
+  searchInput.addEventListener('input', function() {
+    applyCurrentFilter();
+    renderNotes();
+  });
+  
+  // Refresh
+  refreshBtn.onclick = () => {
+    loadNotes();
+  };
+  
+  // Filters
+  showAllBtn.onclick = () => setFilter('all');
+  showCompletedBtn.onclick = () => setFilter('completed');
+  showPendingBtn.onclick = () => setFilter('pending');
+}
+
+// Set filter
+function setFilter(filter) {
+  currentFilter = filter;
+  
+  // Update button states
+  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+  if (filter === 'all') showAllBtn.classList.add('active');
+  else if (filter === 'completed') showCompletedBtn.classList.add('active');
+  else if (filter === 'pending') showPendingBtn.classList.add('active');
+  
+  applyCurrentFilter();
+  renderNotes();
+}
+
+// Apply current filter
+function applyCurrentFilter() {
+  const searchTerm = searchInput.value.toLowerCase();
+  
+  filteredNotes = allNotes.filter(note => {
+    // Search filter
+    const matchesSearch = !searchTerm || 
+      note.title.toLowerCase().includes(searchTerm) ||
+      (note.description && note.description.toLowerCase().includes(searchTerm));
+    
+    // Status filter
+    let matchesStatus = true;
+    if (currentFilter === 'completed') {
+      matchesStatus = note.done === true;
+    } else if (currentFilter === 'pending') {
+      matchesStatus = note.done !== true;
+    }
+    
+    // Don't show deleted notes
+    const notDeleted = !note.deleted;
+    
+    return matchesSearch && matchesStatus && notDeleted;
+  });
+  
+  // Check for notes with images
+  const notesWithImages = filteredNotes.filter(note => note.images && note.images.length > 0);
+}
+
+// Load notes
+function loadNotes() {
+  loadingState.style.display = 'block';
+  emptyState.style.display = 'none';
+  notesGrid.style.display = 'none';
+  
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "get_all_notes" }));
+  } else {
+    // If WebSocket is not ready, show empty state
+    setTimeout(() => {
+      loadingState.style.display = 'none';
+      emptyState.style.display = 'block';
+    }, 1000);
+  }
+}
+
+// Validate and clean up missing images
+        function validateNoteImages(notes) {
+          // With file path storage approach, we don't validate image existence in the web interface
+          // Images are stored as file paths and displayed as placeholders
+          return notes.map(note => {
+            return note;
+          });
+        }
+
+// Render notes
+function renderNotes() {
+  loadingState.style.display = 'none';
+  
+  if (filteredNotes.length === 0) {
+    emptyState.style.display = 'block';
+    notesGrid.style.display = 'none';
+    return;
+  }
+  
+  emptyState.style.display = 'none';
+  notesGrid.style.display = 'grid';
+  
+  // Sort notes by creation date (newest first)
+  const sortedNotes = [...filteredNotes].sort((a, b) => {
+    const dateA = new Date(a.creation_date || 0);
+    const dateB = new Date(b.creation_date || 0);
+    return dateB - dateA;
+  });
+  
+  notesGrid.innerHTML = sortedNotes.map(note => createNoteCard(note)).join('');
+  
+  // No image rotation needed
+}
+
+// Create note card HTML
+function createNoteCard(note) {
+  const isCompleted = note.done === true;
+  const isParent = !note.parent_id;
+  const hasSubNotes = note.subNotes && note.subNotes.length > 0;
+  const subNotesCount = hasSubNotes ? note.subNotes.length : 0;
+  const hasImages = note.images && note.images.length > 0;
+  const imageCount = hasImages ? note.images.length : 0;
+  
+  // Image detection
+  
+  const statusText = isCompleted ? 'Completed' : 'Pending';
+  const statusClass = isCompleted ? 'completed' : 'pending';
+  
+  const createdAt = note.creation_date ? new Date(note.creation_date).toLocaleDateString() : 'Unknown';
+  
+  // Generate image preview HTML
+  let imagePreviewHtml = '';
+  if (hasImages) {
+    if (imageCount === 1) {
+      // Single image - show normally
+      const firstImage = note.images[0];
+      const displayPath = convertImagePathForDisplay(firstImage);
+      
+      if (displayPath) {
+        const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
+        const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
+          `data-image-path="${firstImage}"` : '';
+        
+        imagePreviewHtml = `
+          <div class="note-images" data-note-id="${note.id}">
+            <div class="image-preview-container">
+              <img class="image-preview-img" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
+                   onerror="this.parentElement.innerHTML='<div class=\\'image-error\\'>📷 Image not found<br><small>Click to manage</small></div>'"
+                   onclick="showImageManagement('${note.id}')">
+            </div>
+          </div>
+        `;
+      } else {
+        imagePreviewHtml = `
+          <div class="note-images" onclick="showImageManagement('${note.id}')">
+            <div class="image-preview image-placeholder">
+              📷 1 image attached<br>
+              <small style="font-size: 12px; opacity: 0.7;">Click to manage images</small>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      // Multiple images - show first image with counter (no rotation)
+      const firstImage = note.images[0];
+      const displayPath = convertImagePathForDisplay(firstImage);
+      
+      if (displayPath) {
+        const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
+        const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
+          `data-image-path="${firstImage}"` : '';
+        
+        imagePreviewHtml = `
+          <div class="note-images" data-note-id="${note.id}">
+            <div class="image-preview-container">
+              <img class="image-preview-img" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
+                   onerror="this.parentElement.innerHTML='<div class=\\'image-error\\'>📷 ${imageCount} images attached<br><small>Click to manage</small></div>'"
+                   onclick="showImageManagement('${note.id}')">
+              <div class="image-counter">${imageCount} images</div>
+            </div>
+          </div>
+        `;
+      } else {
+        imagePreviewHtml = `
+          <div class="note-images" onclick="showImageManagement('${note.id}')">
+            <div class="image-preview image-placeholder">
+              📷 ${imageCount} images attached<br>
+              <small style="font-size: 12px; opacity: 0.7;">Click to manage images</small>
+            </div>
+          </div>
+        `;
+      }
+    }
+  }
+  
+  return `
+    <div class="note-card ${isCompleted ? 'completed' : ''}" data-note-id="${note.id}">
+      <div class="note-header">
+        <div class="note-title">${escapeHtml(note.title)}</div>
+        <div class="note-actions">
+          ${isParent ? '<span class="parent-indicator" title="Parent Note">P</span>' : ''}
+          <button class="note-menu-btn" data-note-id="${note.id}" title="More actions">⋯</button>
+        </div>
+      </div>
+      ${note.description ? `<div class="note-description">${escapeHtml(note.description)}</div>` : ''}
+      ${imagePreviewHtml}
+      ${hasSubNotes ? `<div class="sub-notes">📝 <span class="sub-notes-count">${subNotesCount}</span> sub-notes</div>` : ''}
+      <div class="note-meta">
+        <span class="note-id">#${note.id}</span>
+        <span class="note-date">${createdAt}</span>
+        <span class="note-status ${statusClass}">${statusText}</span>
+      </div>
+    </div>
+  `;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Convert image path for display in web browser
+function convertImagePathForDisplay(imagePath) {
+  if (!imagePath) {
+    return null;
+  }
+  
+  // Handle content:// URIs - request conversion via WebSocket
+  if (imagePath.startsWith('content://')) {
+    requestContentUriConversion(imagePath);
+    // Return a placeholder that will be updated via WebSocket
+    const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzJhMmYzNiIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYTBhMGEwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+TG9hZGluZy4uLjwvdGV4dD48L3N2Zz4=';
+    return placeholder;
+  }
+  
+  // Handle internal storage paths (from new system) - these should work!
+  if (imagePath.includes('/files/images/') || imagePath.includes('/data/data/')) {
+    console.log('✅ Internal storage path detected:', imagePath);
+    requestImageViaWebSocket(imagePath);
+    // Return a placeholder that will be updated when image data arrives
+    const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwODA0MCIvPjx0ZXh0IHg9IjUwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+SW50ZXJuYWw8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjYwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Mb2FkaW5nLi4uPC90ZXh0Pjwvc3ZnPg==';
+    return placeholder;
+  }
+  
+  // Handle external storage paths - these may have permission issues
+  if (imagePath.startsWith('/storage/') || imagePath.startsWith('/sdcard/')) {
+    console.log('⚠️ External storage path detected (may have permission issues):', imagePath);
+    requestImageViaWebSocket(imagePath);
+    // Return a placeholder that will be updated when image data arrives
+    const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2ZmYTUwMCIvPjx0ZXh0IHg9IjUwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UGVybWlzc2lvbjwvdGV4dD48dGV4dCB4PSI1MCIgeT0iNjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPklzc3VlPC90ZXh0Pjwvc3ZnPg==';
+    return placeholder;
+  }
+  
+  // Handle relative paths (legacy) - these are likely broken links from old storage approach
+  if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
+    // Don't try to access relative paths - they're likely from old storage attempts
+    // Return an error placeholder instead
+    const errorPlaceholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2ZmNjY2NiIvPjx0ZXh0IHg9IjUwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QnJva2VuPC90ZXh0Pjx0ZXh0IHg9IjUwIiB5PSI2MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TGluazwvdGV4dD48L3N2Zz4=';
+    return errorPlaceholder;
+  }
+  
+  return imagePath;
+}
+
+// Request content URI conversion via WebSocket
+function requestContentUriConversion(contentUri) {
+  console.log('DEBUG: requestContentUriConversion called with:', contentUri);
+  console.log('DEBUG: WebSocket state:', ws ? ws.readyState : 'WebSocket is null');
+  
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    console.log('DEBUG: Sending content URI conversion request via WebSocket');
+    const message = {
+      type: 'convert_content_uri',
+      contentUri: contentUri
+    };
+    console.log('DEBUG: WebSocket message:', JSON.stringify(message));
+    ws.send(JSON.stringify(message));
+  } else {
+    console.log('DEBUG: WebSocket not available for URI conversion - state:', ws ? ws.readyState : 'null');
+  }
+}
+
+// Request image data via WebSocket
+function requestImageViaWebSocket(imagePath) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const requestId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const message = {
+      type: 'request_image',
+      imagePath: imagePath,
+      requestId: requestId
+    };
+    ws.send(JSON.stringify(message));
+  }
+}
+
+// Handle successful URI conversion
+function handleUriConversionSuccess(data) {
+  console.log('DEBUG: URI conversion successful:', data.contentUri, '->', data.filePath);
+  
+  // Find all image elements that need updating
+  const imageElements = document.querySelectorAll(`img[data-content-uri="${data.contentUri}"]`);
+  
+  imageElements.forEach(img => {
+    // Request the converted image via WebSocket instead of HTTP
+    console.log('DEBUG: Requesting converted image via WebSocket:', data.filePath);
+    requestImageViaWebSocket(data.filePath);
+    img.removeAttribute('data-content-uri');
+    // Add a data attribute to track this image for when the data arrives
+    img.setAttribute('data-image-path', data.filePath);
+  });
+}
+
+// Handle image data received via WebSocket
+function handleImageDataReceived(data) {
+  // Find all image elements that are waiting for this image path
+  // Check both data-image-path and data-content-uri attributes
+  const imageElements = document.querySelectorAll(`img[data-image-path="${data.imagePath}"], img[data-content-uri="${data.imagePath}"]`);
+  
+  imageElements.forEach(img => {
+    // Create data URL from base64 data
+    const dataUrl = `data:${data.contentType};base64,${data.data}`;
+    img.src = dataUrl;
+    img.removeAttribute('data-image-path');
+    img.removeAttribute('data-content-uri');
+    console.log('Successfully loaded image from content URI:', data.imagePath);
+  });
+}
+
+function handleImageUrlReceived(data) {
+  console.log('DEBUG: Received image URL:', data.imageUrl, 'for path:', data.imagePath);
+  
+  // Find all image elements that are waiting for this image path
+  const imageElements = document.querySelectorAll(`img[data-image-path="${data.imagePath}"], img[data-content-uri="${data.imagePath}"]`);
+  
+  imageElements.forEach(img => {
+    // Use the HTTP URL directly
+    img.src = data.imageUrl;
+    img.removeAttribute('data-image-path');
+    img.removeAttribute('data-content-uri');
+    console.log('✅ Successfully set HTTP image URL:', data.imageUrl);
+  });
+}
+
+        // Handle image error received via WebSocket
+        function handleImageError(data) {
+          
+          // Find all image elements that are waiting for this image path
+          const imageElements = document.querySelectorAll(`img[data-image-path="${data.imagePath}"]`);
+          
+          imageElements.forEach(img => {
+            // Determine error type and show appropriate message
+            let errorMessage = "❌ Image Not Accessible";
+            let errorDetail = "Permission or file access issue";
+            
+            if (data.error.includes("Permission Denial")) {
+              errorMessage = "🔒 Permission Issue";
+              errorDetail = "Android storage restrictions prevent access";
+            } else if (data.error.includes("not found") || data.error.includes("file not found")) {
+              errorMessage = "📁 File Missing";
+              errorDetail = "Original file may have been moved or deleted";
+            }
+            
+            // Show error placeholder with cleanup option
+            img.parentElement.innerHTML = `
+              <div class="image-error" onclick="cleanupBrokenImage('${data.imagePath}')">
+                ${errorMessage}<br>
+                <small>${errorDetail}</small><br>
+                <small style="color: #888; margin-top: 4px;">Click to remove from note</small>
+              </div>`;
+          });
+        }
+        
+        // Clean up broken image from note
+        function cleanupBrokenImage(imagePath) {
+          
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            const message = {
+              type: 'cleanup_broken_image',
+              imagePath: imagePath
+            };
+            console.log('DEBUG: Sending cleanup request:', JSON.stringify(message));
+            ws.send(JSON.stringify(message));
+            
+            // Show feedback
+            showToast('🧹 Removing broken image link...');
+          } else {
+            console.log('DEBUG: WebSocket not available for cleanup');
+            showToast('❌ Cannot remove image - connection issue');
+          }
+        }
+        
+        // Simple toast notification
+        function showToast(message) {
+          const toast = document.createElement('div');
+          toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            z-index: 10000;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          `;
+          toast.textContent = message;
+          document.body.appendChild(toast);
+          
+          setTimeout(() => {
+            if (toast.parentNode) {
+              toast.parentNode.removeChild(toast);
+            }
+          }, 3000);
+        }
+
+// Handle note card clicks
+document.addEventListener('click', function(e) {
+  // Check if it's a menu button click
+  if (e.target.classList.contains('note-menu-btn')) {
+    e.stopPropagation(); // Prevent card click
+    const noteId = e.target.getAttribute('data-note-id');
+    showNoteMenu(noteId);
+    return;
+  }
+  
+  // Check if it's a note card click (but not on menu button)
+  const noteCard = e.target.closest('.note-card');
+  if (noteCard && !e.target.closest('.note-actions')) {
+    const noteId = noteCard.getAttribute('data-note-id');
+    if (noteId) {
+      // Navigate to chat and automatically execute /findbyid command
+      window.location.href = `index.html?findbyid=${noteId}`;
+    }
+  }
+});
+
+// Show note menu
+function showNoteMenu(noteId) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+  
+  // Remove existing menu
+  const existingMenu = document.querySelector('.edit-menu');
+  if (existingMenu) {
+    existingMenu.remove();
+  }
+  
+  // Create menu
+  const menu = document.createElement('div');
+  menu.className = 'edit-menu';
+  
+  const hasImages = note.images && note.images.length > 0;
+  
+  menu.innerHTML = `
+    <div class="edit-menu-item" onclick="openInChat('${noteId}')">💬 Open in Chat</div>
+    <div class="edit-menu-item" onclick="markAsDone('${noteId}')">✅ Mark as Done</div>
+    <div class="edit-menu-item" onclick="showImageManagement('${noteId}')">🖼️ Manage Images ${hasImages ? `(${note.images.length})` : ''}</div>
+    <div class="edit-menu-item danger" onclick="deleteNote('${noteId}')">🗑️ Delete Note</div>
+  `;
+  
+  // Position menu
+  const noteCard = document.querySelector(`[data-note-id="${noteId}"]`);
+  if (noteCard) {
+    noteCard.style.position = 'relative';
+    noteCard.appendChild(menu);
+    
+    // Close menu when clicking outside
+    setTimeout(() => {
+      document.addEventListener('click', function closeMenu(e) {
+        if (!menu.contains(e.target)) {
+          menu.remove();
+          document.removeEventListener('click', closeMenu);
+        }
+      });
+    }, 100);
+  }
+}
+
+// Open note in chat
+function openInChat(noteId) {
+  window.location.href = `index.html?findbyid=${noteId}`;
+}
+
+// Mark note as done
+function markAsDone(noteId) {
+  // This would need to be implemented with WebSocket communication
+  alert('Mark as done functionality needs to be implemented');
+}
+
+// Show image management modal
+function showImageManagement(noteId) {
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) return;
+  
+  const modal = document.getElementById('imageModal');
+  const imageGrid = document.getElementById('imageGrid');
+  
+  if (note.images && note.images.length > 0) {
+    imageGrid.innerHTML = note.images.map((imagePath, index) => `
+      <div class="image-item">
+        <div class="image-placeholder" style="width: 100%; height: 120px; background: #2a2f36; border: 2px dashed #444; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #a0a0a0; text-align: center; border-radius: 6px;">
+          <div style="font-size: 24px; margin-bottom: 8px;">📷</div>
+          <div style="font-size: 12px; word-break: break-all; padding: 0 8px;">${imagePath}</div>
+        </div>
+        <div class="image-item-actions">
+          <button class="image-delete-btn" onclick="deleteImage('${noteId}', '${imagePath}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    imageGrid.innerHTML = '<div class="no-images">No images in this note</div>';
+  }
+  
+  modal.classList.add('show');
+}
+
+// Close image modal
+function closeImageModal() {
+  const modal = document.getElementById('imageModal');
+  modal.classList.remove('show');
+}
+
+// Delete image
+function deleteImage(noteId, imagePath) {
+  if (confirm('Are you sure you want to delete this image?')) {
+    // This would need to be implemented with WebSocket communication
+    alert('Delete image functionality needs to be implemented');
+  }
+}
+
+// Delete note
+function deleteNote(noteId) {
+  if (confirm('Are you sure you want to delete this note?')) {
+    // This would need to be implemented with WebSocket communication
+    alert('Delete note functionality needs to be implemented');
+  }
+}
+
+// Image rotation removed - showing static first image only
+
+// Handle window resize
+window.addEventListener('resize', function() {
+  // Re-render notes to adjust grid layout
+  renderNotes();
+});
+</script>
+</body>
+</html>

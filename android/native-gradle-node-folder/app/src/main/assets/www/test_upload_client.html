@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Upload Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .primary { background: #007bff; color: white; }
+        .secondary { background: #6c757d; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Upload Test Client</h1>
+    
+    <div class="test-section">
+        <h2>WebSocket Connection Test</h2>
+        <button id="connectBtn" class="primary">Connect to Server</button>
+        <button id="disconnectBtn" class="secondary">Disconnect</button>
+        <div id="connectionStatus" class="status info">Not connected</div>
+    </div>
+    
+    <div class="test-section">
+        <h2>File Upload Test</h2>
+        <input type="file" id="fileInput" accept="image/*" multiple>
+        <button id="uploadBtn" class="primary" disabled>Upload Selected Files</button>
+        <div id="uploadStatus" class="status info">No files selected</div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Server Messages</h2>
+        <div id="messages" style="height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #f8f9fa;"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentNoteId = '20'; // Test note ID
+        
+        // WebSocket connection
+        document.getElementById('connectBtn').addEventListener('click', function() {
+            try {
+                ws = new WebSocket('ws://localhost:8080');
+                
+                ws.onopen = function() {
+                    addMessage('✅ Connected to server', 'success');
+                    document.getElementById('connectionStatus').textContent = 'Connected';
+                    document.getElementById('connectionStatus').className = 'status success';
+                };
+                
+                ws.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
+                    addMessage('📨 Received: ' + JSON.stringify(data, null, 2), 'info');
+                };
+                
+                ws.onerror = function(error) {
+                    addMessage('❌ WebSocket error: ' + error, 'error');
+                };
+                
+                ws.onclose = function() {
+                    addMessage('🔌 Disconnected from server', 'info');
+                    document.getElementById('connectionStatus').textContent = 'Disconnected';
+                    document.getElementById('connectionStatus').className = 'status error';
+                };
+                
+                addMessage('🔄 Connecting to server...', 'info');
+            } catch (error) {
+                addMessage('❌ Connection failed: ' + error.message, 'error');
+            }
+        });
+        
+        document.getElementById('disconnectBtn').addEventListener('click', function() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        });
+        
+        // File upload
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                document.getElementById('uploadStatus').textContent = files.length + ' file(s) selected';
+                document.getElementById('uploadBtn').disabled = false;
+            } else {
+                document.getElementById('uploadStatus').textContent = 'No files selected';
+                document.getElementById('uploadBtn').disabled = true;
+            }
+        });
+        
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            const files = document.getElementById('fileInput').files;
+            if (files.length === 0) return;
+            
+            uploadFiles(files);
+        });
+        
+        async function uploadFiles(files) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                addMessage('❌ WebSocket not connected', 'error');
+                return;
+            }
+            
+            addMessage('📤 Starting upload of ' + files.length + ' file(s)...', 'info');
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                await uploadSingleFile(file);
+            }
+        }
+        
+        function uploadSingleFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64 = e.target.result;
+                    const timestamp = new Date().getTime();
+                    const filename = `note_${currentNoteId}_${timestamp}.jpg`;
+                    
+                    const uploadData = {
+                        type: 'upload_file',
+                        noteId: currentNoteId,
+                        filename: filename,
+                        fileData: base64,
+                        fileSize: file.size,
+                        fileType: file.type
+                    };
+                    
+                    addMessage('📁 Uploading: ' + filename + ' (' + file.size + ' bytes)', 'info');
+                    ws.send(JSON.stringify(uploadData));
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function addMessage(message, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'status ' + type;
+            messageDiv.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html>

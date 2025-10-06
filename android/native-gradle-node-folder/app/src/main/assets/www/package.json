@@ -1,0 +1,27 @@
+{
+  "name": "note-speaker-tests",
+  "version": "1.0.0",
+  "description": "Simple E2E tests for Note Speaker application",
+  "main": "test_runner.js",
+  "scripts": {
+    "test": "node test_runner.js all",
+    "test:note": "node test_runner.js tests/note_taking_flow.js",
+    "test:basic": "node test_runner.js tests/basic_operations.js",
+    "test:editing": "node test_runner.js tests/editing_flow.js",
+    "test:subnotes": "node test_runner.js tests/sub_note_operations.js",
+    "test:ai": "node test_runner.js tests/ai_conversation.js",
+    "test:errors": "node test_runner.js tests/error_handling.js",
+    "test:example": "node test_runner.js tests/example_flow.js"
+  },
+  "keywords": [
+    "testing",
+    "e2e",
+    "note-taking",
+    "droidscript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
