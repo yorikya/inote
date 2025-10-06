@@ -1,0 +1,24 @@
+[
+  {
+    "id": "1",
+    "title": "Welcome",
+    "description": "This is a sample note created by min.js backend",
+    "parent_id": null,
+    "done": false,
+    "images": [],
+    "deleted": false,
+    "creation_date": "2025-10-06T10:58:20.672Z"
+  },
+  {
+    "id": "2",
+    "title": "upload-test",
+    "description": "for upload",
+    "parent_id": null,
+    "done": false,
+    "images": [
+      "images/note_2_test.png"
+    ],
+    "deleted": false,
+    "creation_date": "2025-10-06T12:00:31.081Z"
+  }
+]
