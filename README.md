@@ -74,7 +74,7 @@ android/native-gradle-node-folder/app/libnode/bin/x86_64/libnode.so
 2.  Run the Gradle build command:
 
     ```bash
-    ./gradlew assembleDebug
+    ./gradlew clean assembleDebug
     ```
 
 Notes & troubleshooting
