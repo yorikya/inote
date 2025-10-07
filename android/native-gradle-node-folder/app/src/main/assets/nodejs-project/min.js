@@ -1,3 +1,4 @@
+
 /*
 Fuller port of note-speaker backend logic into a single min.js file.
 Implements: persistent NoteManager (file-based JSON), CommandRouter for
@@ -6,7 +7,7 @@ WebSocket message handling compatible with the frontend.
 */
 
 const http = require('http');
-const url = require('url');
+const url = require('path');
 const path = require('path');
 const WebSocket = require('ws');
 
@@ -16,10 +17,63 @@ const NoteManager = require('./NoteManager');
 const CommandRouter = require('./CommandRouter');
 const AIService = require('./AIService');
 const StateManager = require('./StateManager');
+const ImageManager = require('./ImageManager');
 
 // HTTP server
 const server = http.createServer((req, res) => {
   const p = url.parse(req.url).pathname;
+  // Handle image upload
+  if (p === '/uploadimage' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString(); // Convert Buffer to string
+    });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        const { noteId, imageData, filename } = data;
+        
+        // Check if note exists
+        const note = NoteManager.findById(noteId)[0];
+        if (!note) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Note not found' }));
+          return;
+        }
+        
+        // Check image limit
+        if (ImageManager.hasReachedImageLimit(noteId)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Maximum 5 images per note' }));
+          return;
+        }
+        
+        // Convert base64 to buffer
+        const imageBuffer = Buffer.from(imageData, 'base64');
+        
+        // Save image
+        const imagePath = ImageManager.saveImage(noteId, imageBuffer, filename);
+        
+        // Update note with image path
+        const images = note.images || [];
+        images.push(imagePath);
+        NoteManager.update(noteId, { images });
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          success: true, 
+          imagePath,
+          note: NoteManager.findById(noteId)[0]
+        }));
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to upload image' }));
+      }
+    });
+    return;
+  }
+  
   // Serve images saved under /image/<rel>
   if (p && p.startsWith('/image/')) {
     const rel = decodeURIComponent(p.replace('/image/', ''));
@@ -104,6 +158,50 @@ async function handleChat(ws, o) {
           send(ws, { type: 'note_updated', note: NoteManager.findById(data.id)[0] });
           send(ws, { type: 'reply', text: `Note marked as done.` });
           break;
+        case 'add_image':
+          // Image is already saved, just confirm it was added
+          const updatedNoteWithImage = NoteManager.findById(data.noteId)[0];
+          send(ws, { type: 'note_updated', note: updatedNoteWithImage });
+          send(ws, { type: 'reply', text: `Image "${data.imageName}" added to note.` });
+          break;
+        case 'confirm_image_upload':
+          // Image was uploaded and confirmed, add it to the note
+          const note = NoteManager.findById(data.noteId)[0];
+          if (note) {
+            const images = note.images || [];
+            images.push(data.imagePath);
+            NoteManager.update(data.noteId, { images });
+            send(ws, { type: 'note_updated', note: NoteManager.findById(data.noteId)[0] });
+            send(ws, { type: 'reply', text: `Image "${data.imageName}" added to note.` });
+          }
+          break;
+        case 'add_image_to_note': {
+          const { noteId, imagePath } = data;
+          const notes = NoteManager.findById(noteId);
+          if (notes && notes.length > 0) {
+            const note = notes[0];
+            
+            // Check if image already exists to prevent duplicates
+            if (!note.images) {
+              note.images = [];
+            }
+            
+            if (!note.images.includes(imagePath)) {
+              note.images.push(imagePath);
+              NoteManager.update(noteId, { images: note.images });
+              
+              const updatedNote = NoteManager.findById(noteId)[0];
+              send(ws, { type: 'note_updated', note: updatedNote });
+              send(ws, { type: 'reply', text: `Image added to note '${note.title}'.` });
+            } else {
+              send(ws, { type: 'reply', text: 'Image already exists in this note.' });
+            }
+          } else {
+            send(ws, { type: 'reply', text: 'Note not found.' });
+          }
+          StateManager.initializeState(ws);
+          return;
+        }
       }
       StateManager.initializeState(ws); // Reset state
       return;
@@ -133,10 +231,66 @@ async function handleChat(ws, o) {
           send(ws, { type: 'note_updated', note: NoteManager.findById(data.id)[0] });
           send(ws, { type: 'reply', text: `Note marked as done.` });
           break;
+        case 'add_image':
+          // Image is already saved, just confirm it was added
+          const updatedNoteWithImage = NoteManager.findById(data.noteId)[0];
+          send(ws, { type: 'note_updated', note: updatedNoteWithImage });
+          send(ws, { type: 'reply', text: `Image "${data.imageName}" added to note.` });
+          break;
+        case 'confirm_image_upload':
+          // Image was uploaded and confirmed, add it to the note
+          const note = NoteManager.findById(data.noteId)[0];
+          if (note) {
+            const images = note.images || [];
+            images.push(data.imagePath);
+            NoteManager.update(data.noteId, { images });
+            send(ws, { type: 'note_updated', note: NoteManager.findById(data.noteId)[0] });
+            send(ws, { type: 'reply', text: `Image "${data.imageName}" added to note.` });
+          }
+          break;
+        case 'add_image_to_note': {
+          const { noteId, imagePath } = data;
+          const notes = NoteManager.findById(noteId);
+          if (notes && notes.length > 0) {
+            const note = notes[0];
+            
+            // Check if image already exists to prevent duplicates
+            if (!note.images) {
+              note.images = [];
+            }
+            
+            if (!note.images.includes(imagePath)) {
+              note.images.push(imagePath);
+              NoteManager.update(noteId, { images: note.images });
+              
+              const updatedNote = NoteManager.findById(noteId)[0];
+              send(ws, { type: 'note_updated', note: updatedNote });
+              send(ws, { type: 'reply', text: `Image added to note '${note.title}'.` });
+            } else {
+              send(ws, { type: 'reply', text: 'Image already exists in this note.' });
+            }
+          } else {
+            send(ws, { type: 'reply', text: 'Note not found.' });
+          }
+          StateManager.initializeState(ws);
+          return;
+        }
       }
       StateManager.initializeState(ws); // Reset state
       return;
     } else if (lowerText === 'no') {
+      // If user says no to adding image, we should remove it
+      if (state.pendingConfirmation.action === 'add_image') {
+        const { noteId, imagePath } = state.pendingConfirmation.data;
+        // Remove the image from the note
+        const note = NoteManager.findById(noteId)[0];
+        if (note && note.images) {
+          const updatedImages = note.images.filter(img => img.path !== imagePath);
+          NoteManager.update(noteId, { images: updatedImages });
+          // Optionally delete the file from disk
+          ImageManager.deleteImage(imagePath);
+        }
+      }
       send(ws, { type: 'reply', text: 'Operation cancelled.' });
       StateManager.initializeState(ws); // Reset state
       return;
@@ -165,6 +319,18 @@ async function handleChat(ws, o) {
   // Handle sub-note creation
   if (state.mode === 'pending_subnote_creation') {
     const parentNote = state.findContext.selectedNote;
+    
+    // Check if auto-confirmation is enabled
+    if (autoConfirm || StateManager.getAutoConfirm(ws)) {
+      // Auto-create the sub-note without asking for confirmation
+      const newNote = NoteManager.create(text, '', parentNote.id);
+      send(ws, { type: 'created_note', note: newNote });
+      send(ws, { type: 'reply', text: `Sub-note created successfully! ID: ${newNote.id}, Title: '${text}'` });
+      StateManager.initializeState(ws); // Reset state
+      return;
+    }
+    
+    // Otherwise, ask for confirmation
     StateManager.setState(ws, {
       mode: 'pending_confirmation',
       pendingConfirmation: {
@@ -229,15 +395,6 @@ async function handleChat(ws, o) {
             send(ws, { type: 'reply', text: 'No note selected.' });
           }
           return;
-        case '/createsubnote':
-          const parentNote = state.findContext.selectedNote;
-          if (parentNote) {
-            StateManager.setState(ws, { mode: 'pending_subnote_creation' });
-            send(ws, { type: 'reply', text: 'What is the title of the sub-note?' });
-          } else {
-            send(ws, { type: 'reply', text: 'No parent note selected.' });
-          }
-          return;
         case '/markdone':
           const noteToMark = state.findContext.selectedNote;
           if (noteToMark) {
@@ -275,7 +432,7 @@ async function handleChat(ws, o) {
         case '/selectsubnote':
           if (parsed.args.length > 0) {
             const noteId = parsed.args[0];
-            const selectedNote = state.findContext.notes.find(n => n.id === noteId);
+            const selectedNote = state.findContext.notes.find(n => String(n.id) === noteId);
             if (selectedNote) {
               StateManager.setState(ws, { findContext: { ...state.findContext, selectedNote } });
               send(ws, { type: 'reply', text: `Selected note '${selectedNote.title}'.` });
@@ -284,6 +441,27 @@ async function handleChat(ws, o) {
             }
           } else {
             send(ws, { type: 'reply', text: 'Usage: /selectsubnote [id]' });
+          }
+          return;
+        case '/uploadimage':
+          const noteToUpload = state.findContext.selectedNote;
+          if (noteToUpload) {
+            // Check if already has 5 images
+            if (ImageManager.hasReachedImageLimit(noteToUpload.id)) {
+              send(ws, { type: 'reply', text: 'Maximum 5 images per note. Please delete some images first.' });
+              return;
+            }
+            
+            // Send message to frontend to open file picker
+            send(ws, { 
+              type: 'request_image_upload', 
+              data: { 
+                noteId: noteToUpload.id,
+                currentImageCount: ImageManager.getNoteImages(noteToUpload.id).length
+              } 
+            });
+          } else {
+            send(ws, { type: 'reply', text: 'No note selected.' });
           }
           return;
       }
@@ -329,8 +507,10 @@ async function handleChat(ws, o) {
         if (!parsed.args.length) { send(ws, { type: 'reply', text: 'Usage: /findbyid ID' }); return; }
         const note = NoteManager.findById(parsed.args[0])[0];
         if (note) {
-          StateManager.setState(ws, { mode: 'find_context', findContext: { notes: [note], selectedNote: note } });
-          send(ws, { type: 'found_notes', notes: [note] });
+          const children = NoteManager.findChildren(note.id);
+          const notesToShow = [note, ...children];
+          StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: note } });
+          send(ws, { type: 'found_notes', notes: notesToShow });
           send(ws, { type: 'reply', text: `Found note '${note.title}'. What would you like to do?` });
         } else {
           send(ws, { type: 'reply', text: 'Note not found.' });
@@ -338,6 +518,50 @@ async function handleChat(ws, o) {
         return;
       case '/showparents':
         send(ws, { type: 'found_notes', notes: NoteManager.getAll().filter(n => !n.parent_id) });
+        return;
+      case '/createsubnote':
+          let parentNote = null;
+          if (parsed.args.length > 0) {
+            const parentNoteId = parsed.args[0];
+            parentNote = NoteManager.findById(parentNoteId)[0];
+            if (!parentNote) {
+              send(ws, { type: 'reply', text: 'Parent note not found.' });
+              return;
+            }
+          } else {
+            if (state.mode === 'find_context') {
+              parentNote = state.findContext.selectedNote;
+            }
+          }
+
+          if (parentNote) {
+            StateManager.setState(ws, { mode: 'pending_subnote_creation', findContext: { ...state.findContext, selectedNote: parentNote } });
+            send(ws, { type: 'reply', text: 'What is the title of the sub-note?' });
+          } else {
+            send(ws, { type: 'reply', text: 'No parent note selected. Use /findnote first or specify a parent note ID.' });
+          }
+          return;
+      case '/editnotedescription':
+        if (parsed.args.length < 3) {
+          send(ws, { type: 'reply', text: 'Usage: /editnote [id] [property] [value]' });
+          return;
+        }
+        const [noteId, property, ...valueParts] = parsed.args;
+        const value = valueParts.join(' ');
+        const noteToUpdate = NoteManager.findById(noteId)[0];
+
+        if (!noteToUpdate) {
+          send(ws, { type: 'reply', text: 'Note not found.' });
+          return;
+        }
+
+        if (property.toLowerCase() === 'description') {
+          NoteManager.update(noteId, { description: value });
+          send(ws, { type: 'note_updated', note: NoteManager.findById(noteId)[0] });
+          send(ws, { type: 'reply', text: `Note description updated.` });
+        } else {
+          send(ws, { type: 'reply', text: `Property '${property}' cannot be edited.` });
+        }
         return;
       default:
         send(ws, { type: 'reply', text: 'Unknown slash command' });
@@ -366,42 +590,63 @@ wss.on('connection', (ws) => {
         case 'delete_note': if (NoteManager.delete(o.id)) send(ws, { type: 'note_deleted', id: o.id }); else send(ws, { type: 'reply', text: 'Note not found' }); break;
         case 'set_auto_confirm': StateManager.setAutoConfirm(ws, o.enabled); send(ws, { type: 'auto_confirm_status', enabled: o.enabled }); break;
         case 'debug': if (o.action === 'get_notes') send(ws, { type: 'debug_notes', notes: JSON.stringify(NoteManager.getAll(), null, 2) }); if (o.action === 'clear_notes') { NoteManager.clearAll(); send(ws, { type: 'debug_cleared' }); } break;
-        case 'upload_file': {          if (!o.noteId) { send(ws, { type: 'upload_error', error: 'Missing noteId' }); break; }
-          const imagesDir = path.join(__dirname, 'images');
-          if (!require('fs').existsSync(imagesDir)) require('fs').mkdirSync(imagesDir);
-
-          if (o.fileData && o.imagePath) {
-            try {
-              const b = Buffer.from(o.fileData, 'base64');
-              const dest = path.join(__dirname, o.imagePath);
-              const destDir = path.dirname(dest);
-              if (!require('fs').existsSync(destDir)) require('fs').mkdirSync(destDir, { recursive: true });
-              require('fs').writeFileSync(dest, b);
-              const updated3 = NoteManager.addImage(o.noteId, o.imagePath);
-              if (updated3) send(ws, { type: 'upload_success', imagePath: o.imagePath, message: 'Image saved and added to note', note: updated3 }); else send(ws, { type: 'upload_error', error: 'Note not found' });
-            } catch (e) { console.error('save base64 error', e); send(ws, { type: 'upload_error', error: 'Failed to save image' }); } 
-          } else if (o.imagePath) {
-            try {
-              const src = o.imagePath;
-              const filename = path.basename(src);
-              const destRel = path.join('images', `note_${o.noteId}_${Date.now()}_${filename}`);
-              const dest = path.join(__dirname, destRel);
-              if (require('fs').existsSync(src)) {
-                const destDir = path.dirname(dest);
-                if (!require('fs').existsSync(destDir)) require('fs').mkdirSync(destDir, { recursive: true });
-                require('fs').copyFileSync(src, dest);
-                const updated4 = NoteManager.addImage(o.noteId, destRel);
-                if (updated4) send(ws, { type: 'upload_success', imagePath: destRel, message: 'Image copied and added to note', note: updated4 }); else send(ws, { type: 'upload_error', error: 'Note not found' });
-              } else {
-                const updated5 = NoteManager.addImage(o.noteId, o.imagePath);
-                if (updated5) send(ws, { type: 'upload_success', imagePath: o.imagePath, message: 'Image path recorded (source not on server)', note: updated5 }); else send(ws, { type: 'upload_error', error: 'Note not found' });
-              }
-            } catch (e) { console.error('native path handling error', e); send(ws, { type: 'upload_error', error: 'Failed to handle native path' }); } 
-          } else {
-            send(ws, { type: 'upload_error', error: 'Missing fileData or imagePath' });
+        
+        case 'image_upload': {
+          const { noteId, imageData, imageName } = o;
+          
+          // Validate inputs
+          if (!noteId || !imageData || !imageName) {
+            send(ws, { type: 'reply', text: 'Invalid image upload data. Missing noteId, imageData, or imageName.' });
+            break;
           }
-        } break;
-        case 'set_auto_confirm': send(ws, { type: 'reply', text: `Auto confirmation ${o.enabled ? 'enabled' : 'disabled'}` }); break;
+
+          // Find the note
+          const notes = NoteManager.findById(noteId);
+          if (!notes || notes.length === 0) {
+            send(ws, { type: 'reply', text: `Note with ID ${noteId} not found.` });
+            break;
+          }
+
+          const note = notes[0];
+
+          // Save the image file
+          const imagesDir = path.join(__dirname, 'images');
+          if (!require('fs').existsSync(imagesDir)) {
+            require('fs').mkdirSync(imagesDir, { recursive: true });
+          }
+
+          const timestamp = Date.now();
+          const sanitizedName = imageName.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const fileName = `note_${noteId}_${timestamp}_${sanitizedName}`;
+          const filePath = path.join(imagesDir, fileName);
+          const relativeFilePath = `images/${fileName}`;
+
+          try {
+            // Decode base64 and save
+            const buffer = Buffer.from(imageData, 'base64');
+            require('fs').writeFileSync(filePath, buffer);
+            console.log(`Image saved to: ${filePath}`);
+
+            // Store the image path in state for confirmation
+            StateManager.setState(ws, {
+              mode: 'pending_confirmation',
+              pendingConfirmation: {
+                action: 'add_image_to_note',
+                data: { noteId, imagePath: relativeFilePath, imageName }
+              }
+            });
+
+            send(ws, { 
+              type: 'reply', 
+              text: `Image '${imageName}' uploaded successfully. Add it to note '${note.title}'? (yes/no)` 
+            });
+          } catch (error) {
+            console.error('Error saving image:', error);
+            send(ws, { type: 'reply', text: `Failed to save image: ${error.message}` });
+          }
+          break;
+        }
+        
         case 'request_file_picker': send(ws, { type: 'reply', text: 'Native file picker not available in Node backend (handled by Android)' }); break;
         default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
       }
@@ -425,4 +670,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, wss, NoteManager };
+module.exports = { server, wss, NoteManager }

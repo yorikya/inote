@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": "1",
+    "title": "Test Note Delete",
+    "description": "",
+    "parent_id": null,
+    "done": false,
+    "images": [],
+    "deleted": false,
+    "creation_date": "2025-10-07T08:33:03.807Z"
+  },
+  {
+    "id": "2",
+    "title": "Test Note Delete",
+    "description": "",
+    "parent_id": null,
+    "done": false,
+    "images": [],
+    "deleted": false,
+    "creation_date": "2025-10-07T08:33:44.783Z"
+  },
+  {
+    "id": "3",
+    "title": "Test Note Select 30004",
+    "description": "",
+    "parent_id": null,
+    "done": false,
+    "images": [],
+    "deleted": false,
+    "creation_date": "2025-10-07T16:46:58.365Z"
+  }
+]

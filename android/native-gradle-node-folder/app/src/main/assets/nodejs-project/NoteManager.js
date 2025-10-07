@@ -1,34 +1,45 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_FILE = path.join(__dirname, 'notes.json');
+const DATA_FILE = process.env.NODE_ENV === 'test'
+  ? path.join(__dirname, 'notes.test.json')
+  : path.join(__dirname, 'notes.json');
 
 const NoteManager = {
   notes: [],
-  lastId: 0,
+  latestNoteId: 0, // Add latestNoteId
   load() {
     try {
       if (fs.existsSync(DATA_FILE)) {
         const raw = fs.readFileSync(DATA_FILE, 'utf8');
-        const parsed = JSON.parse(raw || '[]');
-        this.notes = parsed || [];
-        this.lastId = this.notes.reduce((m, n) => Math.max(m, parseInt(n.id || 0)), 0);
+        const data = JSON.parse(raw || '{ "notes": [], "latestNoteId": 0 }'); // Parse data object
+        this.notes = data.notes || [];
+        this.latestNoteId = data.latestNoteId || 0; // Load latestNoteId
       } else {
         this.notes = [];
-        this.lastId = 0;
+        this.latestNoteId = 0;
         this.save();
       }
     } catch (e) {
       console.error('NoteManager.load error', e);
       this.notes = [];
-      this.lastId = 0;
+      this.latestNoteId = 0;
     }
   },
   save() {
-    try { fs.writeFileSync(DATA_FILE, JSON.stringify(this.notes, null, 2), 'utf8'); } catch (e) { console.error('NoteManager.save error', e); }
+    try {
+      const data = {
+        notes: this.notes,
+        latestNoteId: this.latestNoteId
+      };
+      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {
+      console.error('NoteManager.save error', e);
+    }
   },
   create(title, description = '', parent_id = null) {
-    const id = (++this.lastId).toString();
+    this.latestNoteId++; // Increment latestNoteId
+    const id = this.latestNoteId.toString(); // Use latestNoteId as the new ID
     const note = { id, title, description, parent_id, done: false, images: [], deleted: false, creation_date: new Date().toISOString() };
     this.notes.push(note);
     this.save();
@@ -67,7 +78,11 @@ const NoteManager = {
   findById(id) { return this.notes.filter(n => !n.deleted && n.id === id); },
   findChildren(parentId) { return this.notes.filter(n => !n.deleted && n.parent_id === parentId); },
   getAll() { return this.notes.filter(n => !n.deleted); },
-  clearAll() { this.notes = []; this.lastId = 0; this.save(); }
+  clearAll() {
+    this.notes = [];
+    this.latestNoteId = 0; // Reset latestNoteId
+    this.save();
+  }
 };
 
 NoteManager.load();
