@@ -230,6 +230,7 @@ var GlobalAutoConfirm = {
   enabled: false,
   toggle: function() {
     this.enabled = !this.enabled;
+    Settings.autoConfirm = this.enabled; // Update Settings object
     this.updateUI();
     this.saveToStorage();
     this.updateBackend();
@@ -248,6 +249,7 @@ var GlobalAutoConfirm = {
   loadFromStorage: function() {
     const saved = localStorage.getItem('globalAutoConfirm');
     this.enabled = saved === 'true';
+    Settings.autoConfirm = this.enabled; // Update Settings object
     this.updateUI();
   },
   updateBackend: function() {
@@ -257,6 +259,9 @@ var GlobalAutoConfirm = {
         type: 'set_auto_confirm',
         enabled: this.enabled
       }));
+      
+      // Also update the autoConfirm setting for the next chat message
+      Settings.autoConfirm = this.enabled;
     }
   }
 };
@@ -578,6 +583,9 @@ function loadStoredApiKey() {
   
   // Initialize global auto confirm
   GlobalAutoConfirm.loadFromStorage();
+  
+  // Initialize Settings.autoConfirm with the current value
+  Settings.autoConfirm = GlobalAutoConfirm.enabled;
 }
 
 // Old auto confirmation functions removed - using GlobalAutoConfirm system now
@@ -774,6 +782,18 @@ function connect(){
         // Commands loaded
         // Commands loaded successfully
       }
+      else if(msg.type==='set_auto_confirm') {
+        // Handle set_auto_confirm message from backend
+        GlobalAutoConfirm.enabled = msg.enabled;
+        Settings.autoConfirm = msg.enabled; // Update Settings object
+        GlobalAutoConfirm.updateUI();
+      }
+      else if(msg.type==='auto_confirm_status') {
+        // Update UI when auto-confirmation status changes
+        GlobalAutoConfirm.enabled = msg.enabled;
+        Settings.autoConfirm = msg.enabled; // Update Settings object
+        GlobalAutoConfirm.updateUI();
+      }
       else addMsg(ev.data,'sys'); 
     }
     catch{ addMsg(ev.data,'bot'); }
@@ -797,10 +817,10 @@ formEl.addEventListener("submit", async (e) => {
   // Always send to backend - let backend handle story editing mode
   inputEl.value = "";
   
-  // Send to DroidScript backend via WebSocket for intent processing
+  // Send to Node.js backend via WebSocket for intent processing
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
-    const message = {type:'chat', text, lang: Settings.lang, autoConfirm: GlobalAutoConfirm.enabled };
+    const message = {type:'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm };
     ws.send(JSON.stringify(message));
     } catch (error) {
       addMsg("Error sending message: " + error.message, "sys");
