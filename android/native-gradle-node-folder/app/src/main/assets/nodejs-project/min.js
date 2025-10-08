@@ -116,12 +116,91 @@ wss.on('error', (error) => {
   console.error('WebSocket Server Error:', error);
 });
 
-function send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { console.error('send err', e); } }
+function send(ws, obj) { 
+  try { 
+    ws.send(JSON.stringify(obj)); 
+  } catch (e) { 
+    console.error('send err', e); 
+  } 
+}
 
 function sendUpdatedCommands(ws) {
   const commands = CommandRouter.getAvailableCommands(ws, StateManager);
   send(ws, { type: 'available_commands', commands });
 }
+
+async function processCommandWithParsed(ws, parsed, autoConfirm) {
+  // console.log('DEBUG: processCommandWithParsed called with command:', parsed.cmd, 'args:', parsed.args);
+  // Handle slash commands
+  switch (parsed.cmd) {
+    case '/createnote':
+      const title = parsed.args.join(' ');
+      
+      // Check if auto-confirmation is enabled
+      if (autoConfirm || StateManager.getAutoConfirm(ws)) {
+        // Auto-create the note
+        const newNote = NoteManager.create(title);
+        send(ws, { type: 'created_note', note: newNote });
+        send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}` });
+        return;
+      }
+      
+      // Otherwise, ask for confirmation
+      StateManager.setState(ws, {
+        mode: 'pending_confirmation',
+        pendingConfirmation: {
+          action: 'create_note',
+          data: { title },
+        },
+      });
+      sendUpdatedCommands(ws);
+      send(ws, { type: 'reply', text: `Do you want to create a note with title '${title}'? (yes/no)` });
+      return;
+      
+    case '/findnote':
+      const notes = NoteManager.findByTitle(parsed.args.join(' '));
+      StateManager.setState(ws, { mode: 'find_context', findContext: { notes, selectedNote: notes.length === 1 ? notes[0] : null } });
+      send(ws, { type: 'found_notes', notes });
+      sendUpdatedCommands(ws);
+      
+      if (notes.length === 0) {
+        send(ws, { type: 'reply', text: 'No notes have been found' });
+      } else if (notes.length === 1) {
+        send(ws, { type: 'reply', text: `Found note: ${notes[0].title}` });
+      } else {
+        send(ws, { type: 'reply', text: `Found ${notes.length} notes. Please select one using /selectsubnote [id]` });
+      }
+      return;
+      
+    case '/findbyid':
+      const noteId = parsed.args[0];
+      const note = NoteManager.findById(noteId)[0];
+      if (note) {
+        StateManager.setState(ws, { mode: 'find_context', findContext: { notes: [note], selectedNote: note } });
+        send(ws, { type: 'found_notes', notes: [note] });
+        sendUpdatedCommands(ws);
+        send(ws, { type: 'reply', text: `Found note: ${note.title}` });
+      } else {
+        send(ws, { type: 'reply', text: 'Note not found' });
+      }
+      return;
+      
+    case '/showparents':
+      const allNotes = NoteManager.getAll();
+      send(ws, { type: 'found_notes', notes: allNotes });
+      if (allNotes.length === 0) {
+        send(ws, { type: 'reply', text: 'No notes have been found' });
+      } else {
+        send(ws, { type: 'reply', text: `Found ${allNotes.length} notes` });
+      }
+      return;
+      
+    default:
+      send(ws, { type: 'reply', text: `Unknown command: ${parsed.cmd}` });
+      return;
+  }
+}
+
 
 async function handleChat(ws, o) {
   const state = StateManager.getState(ws);
@@ -134,6 +213,48 @@ async function handleChat(ws, o) {
   // Store the autoConfirm setting in StateManager if it's set in the message
   if (o.autoConfirm !== undefined) {
     StateManager.setAutoConfirm(ws, autoConfirm);
+  }
+
+  // Handle parameter collection mode
+  if (state.mode === 'parameter_collection' && state.parameterCollection) {
+    const paramInfo = state.parameterCollection;
+    
+    // Handle cancel command
+    if (lowerText === 'cancel') {
+      StateManager.setState(ws, { mode: 'initial', parameterCollection: null });
+      sendUpdatedCommands(ws);
+      send(ws, { type: 'reply', text: 'Command cancelled.' });
+      return;
+    }
+    
+    // Handle help command
+    if (lowerText === 'help') {
+      send(ws, { type: 'reply', text: `Help: ${paramInfo.message} Type 'cancel' to cancel this command.` });
+      return;
+    }
+    
+    // Process the parameter input
+    if (text.trim()) {
+      // Execute the original command with the provided parameter
+      const fullCommand = `${paramInfo.command} ${text.trim()}`;
+      const parsed = CommandRouter.parseSlashCommand(fullCommand);
+      
+      if (parsed) {
+        // Reset state and process the command immediately
+        StateManager.setState(ws, { mode: 'initial', parameterCollection: null });
+        sendUpdatedCommands(ws);
+        
+        // Process the command with the parameter
+        await processCommandWithParsed(ws, parsed, autoConfirm);
+        return;
+      } else {
+        send(ws, { type: 'reply', text: paramInfo.message });
+        return;
+      }
+    } else {
+      send(ws, { type: 'reply', text: paramInfo.message });
+      return;
+    }
   }
 
   // Handle confirmation
@@ -367,6 +488,7 @@ async function handleChat(ws, o) {
 
   if (text.startsWith('/')) {
     const parsed = CommandRouter.parseSlashCommand(text);
+    // console.log('DEBUG: Parsed command:', parsed);
     if (!parsed) { send(ws, { type: 'reply', text: 'Bad command' }); return; }
 
     // State-dependent commands
@@ -486,7 +608,21 @@ async function handleChat(ws, o) {
     // General commands
     switch (parsed.cmd) {
       case '/createnote':
-        if (!parsed.args.length) { send(ws, { type: 'reply', text: 'Usage: /createnote TITLE' }); return; }
+        if (!parsed.args.length) {
+          // No title provided - ask for parameter
+          StateManager.setState(ws, {
+            mode: 'parameter_collection',
+            parameterCollection: {
+              command: '/createnote',
+              parameter: 'title',
+              message: 'Please provide a title for the note:'
+            }
+          });
+          sendUpdatedCommands(ws);
+          send(ws, { type: 'reply', text: 'Please provide a title for the note:' });
+          return;
+        }
+        
         const title = parsed.args.join(' ');
         
         // Check if auto-confirmation is enabled
@@ -510,19 +646,48 @@ async function handleChat(ws, o) {
         send(ws, { type: 'reply', text: `Do you want to create a note with title '${title}'? (yes/no)` });
         return;
       case '/findnote':
-        if (!parsed.args.length) { send(ws, { type: 'reply', text: 'Usage: /findnote QUERY' }); return; }
+        if (!parsed.args.length) {
+          // No query provided - ask for parameter
+          StateManager.setState(ws, {
+            mode: 'parameter_collection',
+            parameterCollection: {
+              command: '/findnote',
+              parameter: 'query',
+              message: 'Please provide a search query to find notes:'
+            }
+          });
+          sendUpdatedCommands(ws);
+          send(ws, { type: 'reply', text: 'Please provide a search query to find notes:' });
+          return;
+        }
+        
         const notes = NoteManager.findByTitle(parsed.args.join(' '));
         StateManager.setState(ws, { mode: 'find_context', findContext: { notes, selectedNote: notes.length === 1 ? notes[0] : null } });
         send(ws, { type: 'found_notes', notes });
         sendUpdatedCommands(ws);
-        if (notes.length === 1) {
+        if (notes.length === 0) {
+          send(ws, { type: 'reply', text: 'No notes have been found' });
+        } else if (notes.length === 1) {
           send(ws, { type: 'reply', text: `Found note '${notes[0].title}'. What would you like to do?` });
         } else {
           send(ws, { type: 'reply', text: `Found ${notes.length} notes.` });
         }
         return;
       case '/findbyid':
-        if (!parsed.args.length) { send(ws, { type: 'reply', text: 'Usage: /findbyid ID' }); return; }
+        if (!parsed.args.length) {
+          // No ID provided - ask for parameter
+          StateManager.setState(ws, {
+            mode: 'parameter_collection',
+            parameterCollection: {
+              command: '/findbyid',
+              parameter: 'id',
+              message: 'Please provide a note ID to find:'
+            }
+          });
+          sendUpdatedCommands(ws);
+          send(ws, { type: 'reply', text: 'Please provide a note ID to find:' });
+          return;
+        }
         const note = NoteManager.findById(parsed.args[0])[0];
         if (note) {
           const children = NoteManager.findChildren(note.id);
@@ -589,7 +754,10 @@ async function handleChat(ws, o) {
     }
   }
 
-  send(ws, { type: 'reply', text: 'Echo: ' + (o.text || '') });
+  // Only echo if we're not in parameter collection mode
+  if (state.mode !== 'parameter_collection') {
+    send(ws, { type: 'reply', text: 'Echo: ' + (o.text || '') });
+  }
 }
 
 wss.on('connection', (ws) => {
@@ -679,7 +847,7 @@ wss.on('connection', (ws) => {
     StateManager.clearState(ws);
   });
 
-  send(ws, { type: 'reply', text: 'Connected to min.js backend' });
+  // Connection established - no need to send message to user
 });
 
 // Only start the server if not being imported as a module

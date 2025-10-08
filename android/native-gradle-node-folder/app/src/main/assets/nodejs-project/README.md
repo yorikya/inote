@@ -24,7 +24,7 @@ nohup node min.js > min.log 2>&1 & disown
 3. Open the frontend UI in your browser:
 
 ```
-http://127.0.0.1:8080/
+http://127.0.0.1:30000/
 ```
 
 Notes

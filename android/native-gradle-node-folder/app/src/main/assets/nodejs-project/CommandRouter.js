@@ -64,6 +64,14 @@ function getAvailableCommands(ws, stateManager) {
     ];
   }
   
+  // If in parameter collection mode, return input commands
+  if (state.mode === 'parameter_collection') {
+    return [
+      { action: 'cancel_input', command: 'cancel', category: 'Cancel', description: 'Cancel current command', examples: ['cancel'], requiresParam: false },
+      { action: 'help_input', command: 'help', category: 'Help', description: 'Show help for current command', examples: ['help'], requiresParam: false }
+    ];
+  }
+  
   // Default fallback - return main menu commands
   return [
     { action: 'slash_create_note', command: '/createnote', category: 'Create', description: 'Create a note', examples: ['/createnote groceries'], requiresParam: true },

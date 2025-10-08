@@ -10,6 +10,7 @@ const StateManager = {
         selectedNote: null,
       },
       pendingConfirmation: null,
+      parameterCollection: null,
     });
   },
   setAutoConfirm(ws, enabled) {

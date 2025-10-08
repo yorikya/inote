@@ -44,9 +44,6 @@ async function testContextCommands() {
             // Wait for found_notes
             await waitForMessageType(ws, 'found_notes');
             
-            // Wait a bit for the state to be properly set
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
             // Get commands in note context
             sendMessage(ws, 'get_commands');
             

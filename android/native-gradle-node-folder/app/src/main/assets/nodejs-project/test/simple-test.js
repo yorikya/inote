@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 const path = require('path');
+const { withIsolatedServer, createWebSocketConnection, waitForMessageType, waitForNonCommandMessage, sendMessage, clearMessageQueue } = require('./test-utils');
 
 // Simple test framework
 function test(name, fn) {
@@ -27,34 +28,15 @@ function assertEqual(actual, expected, message) {
     }
 }
 
-// Test server management
+// Test server management - now using isolated servers
 async function withServer(testFn) {
-    // Use random port to avoid conflicts
-    const port = 30000 + Math.floor(Math.random() * 1000);
-    const serverProcess = spawn('node', [path.join(__dirname, '../min.js')], {
-        env: { ...process.env, NODE_PORT: port.toString(), NODE_ENV: 'test' },
-        stdio: 'inherit'
-    });
-
-    // Wait for server to start
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    try {
-        await testFn(port);
-    } finally {
-        serverProcess.kill();
-        await new Promise(resolve => setTimeout(resolve, 100)); // Give it time to close
-    }
+    await withIsolatedServer('simple-test', testFn, { timeout: 30000 });
 }
 
-// WebSocket test helper
+// WebSocket test helper - now using robust connection
 async function withWebSocket(port, testFn) {
-    const ws = new WebSocket(`ws://localhost:${port}`);
+    const ws = await createWebSocketConnection(port);
     ws.setMaxListeners(20); // Increase max listeners to avoid warning
-
-    await new Promise(resolve => {
-        ws.on('open', resolve);
-    });
 
     // Wait for connection message
     await new Promise(resolve => {
@@ -74,10 +56,7 @@ async function withWebSocket(port, testFn) {
     }
 }
 
-// Test message helper
-function sendMessage(ws, type, data) {
-    ws.send(JSON.stringify({ type, ...data }));
-}
+// sendMessage is now imported from test-utils
 
 // Test response helper
 async function waitForMessage(ws, timeout = 10000) {
@@ -96,68 +75,11 @@ async function waitForMessage(ws, timeout = 10000) {
     });
 }
 
-// Helper to wait for specific message type
-async function waitForMessageType(ws, type, timeout = 10000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            console.error(`Timeout waiting for ${type} message`);
-            reject(new Error(`Timeout waiting for ${type} message`));
-        }, timeout);
-        
-        const messageHandler = (data) => {
-            const parsed = JSON.parse(data.toString());
-            console.log('Received message:', parsed.type);
-            
-            if (parsed.type === type) {
-                clearTimeout(timer);
-                ws.removeListener('message', messageHandler);
-                resolve(parsed);
-            }
-        };
-        
-        ws.on('message', messageHandler);
-    });
-}
+// waitForMessageType is now imported from test-utils
 
-// Helper to wait for a message that is NOT available_commands
-async function waitForNonCommandMessage(ws, timeout = 10000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            console.error('Timeout waiting for non-command message');
-            reject(new Error('Timeout waiting for non-command message'));
-        }, timeout);
-        
-        const messageHandler = (data) => {
-            const parsed = JSON.parse(data.toString());
-            console.log('Received message:', parsed.type);
-            
-            if (parsed.type !== 'available_commands') {
-                clearTimeout(timer);
-                ws.removeListener('message', messageHandler);
-                resolve(parsed);
-            }
-        };
-        
-        ws.on('message', messageHandler);
-    });
-}
+// waitForNonCommandMessage is now imported from test-utils
 
-// Helper to clear message queue
-async function clearMessageQueue(ws) {
-    return new Promise((resolve) => {
-        const messages = [];
-        const messageHandler = (data) => {
-            messages.push(JSON.parse(data.toString()));
-        };
-        
-        ws.on('message', messageHandler);
-        setTimeout(() => {
-            ws.removeListener('message', messageHandler);
-            console.log(`Cleared ${messages.length} messages from queue`);
-            resolve();
-        }, 100);
-    });
-}
+// clearMessageQueue is now imported from test-utils
 
 // Helper to wait for a sequence of messages
 async function waitForMessageSequence(ws, types, timeout = 10000) {
@@ -338,22 +260,26 @@ await runTestWithDedicatedServer('should find a note by title', async (ws, creat
         sendMessage(ws, 'chat', { text: `/createsubnote ${noteId}` });
         console.log('!!!Sent createsubnote command for note ID:', noteId);
         
-        // Wait for the reply message (skip available_commands)
-        const response = await waitForNonCommandMessage(ws);
+        // Wait for the reply message, ignoring "Note created successfully" messages
+        let response;
+        do {
+            response = await waitForMessageType(ws, 'reply');
+        } while (response.text.includes('Note created successfully'));
+        
         assertEqual(response.type, 'reply');
         assert(response.text.includes('What is the title of the sub-note'));
         
         sendMessage(ws, 'chat', { text: 'Sub Note' });
         
         // Wait for the reply message (skip available_commands)
-        const confirmResponse = await waitForNonCommandMessage(ws);
+        const confirmResponse = await waitForMessageType(ws, 'reply');
         assertEqual(confirmResponse.type, 'reply');
         assert(confirmResponse.text.includes('Create sub-note'));
 
         sendMessage(ws, 'chat', { text: 'yes' });
         
         // Wait for the created_note message (skip available_commands)
-        const createResponse = await waitForNonCommandMessage(ws);
+        const createResponse = await waitForMessageType(ws, 'created_note');
         console.log('!!!!Create sub-note response:', createResponse);
         assertEqual(createResponse.type, 'created_note');
         assertEqual(createResponse.note.title, 'Sub Note');
@@ -371,11 +297,19 @@ await runTestWithDedicatedServer('should find a note by title', async (ws, creat
         const findResponse = await waitForMessageSequence(ws, ['found_notes', 'reply']);
         console.log('--- Mark Done Test: Found note response:', findResponse);
 
+        // Wait for the state to be properly set to find_context
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
         console.log('--- Mark Done Test: Sending /markdone');
         sendMessage(ws, 'chat', { text: '/markdone' });
         
-        // Wait for the reply message (skip available_commands)
-        const response = await waitForNonCommandMessage(ws);
+        // Wait for the reply message, ignoring "Note created successfully" and "Found note" messages
+        let response;
+        do {
+            response = await waitForMessageType(ws, 'reply');
+            console.log('--- Mark Done Test: Got reply:', response.text);
+        } while (response.text.includes('Note created successfully') || response.text.includes('Found note'));
+        
         console.log('--- Mark Done Test: Mark done response:', response);
         assertEqual(response.type, 'reply');
         assert(response.text.includes('Are you sure you want to mark'));
@@ -383,8 +317,8 @@ await runTestWithDedicatedServer('should find a note by title', async (ws, creat
         console.log('--- Mark Done Test: Sending yes');
         sendMessage(ws, 'chat', { text: 'yes' });
         
-        // Wait for the note_updated message (skip available_commands)
-        const doneResponse = await waitForNonCommandMessage(ws);
+        // Wait for the note_updated message
+        const doneResponse = await waitForMessageType(ws, 'note_updated');
         console.log('--- Mark Done Test: Final done response:', doneResponse);
         assertEqual(doneResponse.type, 'note_updated');
         assert(doneResponse.note.done);

@@ -8,7 +8,8 @@ console.log('🧪 Running all tests...\n');
 const tests = [
     { name: 'quick-test.js', file: 'test/quick-test.js', timeout: 60000 },
     { name: 'simple-test.js', file: 'test/simple-test.js', timeout: 120000 },
-    { name: 'context-commands-test.js', file: 'test/context-commands-test.js', timeout: 60000 }
+    { name: 'context-commands-test.js', file: 'test/context-commands-test.js', timeout: 60000 },
+    { name: 'parameter-collection-test.js', file: 'test/parameter-collection-test.js', timeout: 60000 }
 ];
 
 async function runTest(test) {

@@ -13,6 +13,7 @@
     "test": "node test/simple-test.js",
     "test:quick": "node test/quick-test.js",
     "test:context": "node test/context-commands-test.js",
+    "test:parameters": "node test/parameter-collection-test.js",
     "test:all": "node run-tests.js",
     "test:ci": "npm run test:all"
   }

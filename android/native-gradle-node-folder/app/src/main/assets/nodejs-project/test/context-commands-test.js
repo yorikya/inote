@@ -2,6 +2,7 @@ const WebSocket = require('ws');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { withIsolatedServer, createWebSocketConnection, waitForMessageType, waitForNonCommandMessage, sendMessage, clearMessageQueue } = require('./test-utils');
 
 // Simple test framework
 function test(name, fn) {
@@ -30,42 +31,22 @@ function assertEqual(actual, expected, message) {
 
 // Clean up test data
 function cleanupTestData() {
-    const notesFile = path.join(__dirname, '../notes.test.json');
+    const notesFile = path.join(__dirname, '../notes.context-commands-test.json');
     if (fs.existsSync(notesFile)) {
-        fs.writeFileSync(notesFile, '[]');
-        console.log('Cleaned up notes.test.json');
+        fs.writeFileSync(notesFile, '{"notes": [], "latestNoteId": 0}');
+        console.log('Cleaned up notes.context-commands-test.json');
     }
 }
 
-// Test server management
+// Test server management - now using isolated servers
 async function withServer(testFn) {
-    // Clean up test data before starting
-    cleanupTestData();
-    
-    const port = 30000 + Math.floor(Math.random() * 1000);
-    const serverProcess = spawn('node', [path.join(__dirname, '../min.js')], {
-        env: { ...process.env, NODE_PORT: port.toString(), NODE_ENV: 'test' },
-        stdio: 'inherit'
-    });
-
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    try {
-        await testFn(port);
-    } finally {
-        serverProcess.kill();
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
+    await withIsolatedServer('context-commands-test', testFn, { timeout: 30000 });
 }
 
-// WebSocket test helper
+// WebSocket test helper - now using robust connection
 async function withWebSocket(port, testFn) {
-    const ws = new WebSocket(`ws://localhost:${port}`);
+    const ws = await createWebSocketConnection(port);
     ws.setMaxListeners(20);
-
-    await new Promise(resolve => {
-        ws.on('open', resolve);
-    });
 
     await new Promise(resolve => {
         ws.once('message', resolve);
@@ -82,10 +63,7 @@ async function withWebSocket(port, testFn) {
     }
 }
 
-// Test message helper
-function sendMessage(ws, type, data) {
-    ws.send(JSON.stringify({ type, ...data }));
-}
+// sendMessage is now imported from test-utils
 
 // Test response helper
 async function waitForMessage(ws, timeout = 10000) {
@@ -102,61 +80,7 @@ async function waitForMessage(ws, timeout = 10000) {
     });
 }
 
-// Helper to wait for specific message type
-async function waitForMessageType(ws, type, timeout = 10000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error(`Timeout waiting for ${type} message`));
-        }, timeout);
-        
-        const messageHandler = (data) => {
-            const parsed = JSON.parse(data.toString());
-            if (parsed.type === type) {
-                clearTimeout(timer);
-                ws.removeListener('message', messageHandler);
-                resolve(parsed);
-            }
-        };
-        
-        ws.on('message', messageHandler);
-    });
-}
-
-// Helper to wait for a message that is NOT available_commands
-async function waitForNonCommandMessage(ws, timeout = 10000) {
-    return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-            reject(new Error('Timeout waiting for non-command message'));
-        }, timeout);
-        
-        const messageHandler = (data) => {
-            const parsed = JSON.parse(data.toString());
-            if (parsed.type !== 'available_commands') {
-                clearTimeout(timer);
-                ws.removeListener('message', messageHandler);
-                resolve(parsed);
-            }
-        };
-        
-        ws.on('message', messageHandler);
-    });
-}
-
-// Helper to clear message queue
-async function clearMessageQueue(ws) {
-    return new Promise((resolve) => {
-        const messages = [];
-        const messageHandler = (data) => {
-            messages.push(JSON.parse(data.toString()));
-        };
-        
-        ws.on('message', messageHandler);
-        setTimeout(() => {
-            ws.removeListener('message', messageHandler);
-            resolve();
-        }, 100);
-    });
-}
+// Helper functions are now imported from test-utils
 
 // Run tests
 async function runTests() {
@@ -197,7 +121,7 @@ async function runTests() {
             
             // Create a note first
             sendMessage(ws, 'chat', { text: `/createnote ${noteTitle}` });
-            await waitForNonCommandMessage(ws); // Confirmation prompt
+            await waitForMessageType(ws, 'reply'); // Confirmation prompt
             sendMessage(ws, 'chat', { text: 'yes' });
             await waitForMessageType(ws, 'created_note');
             await clearMessageQueue(ws);
@@ -208,11 +132,9 @@ async function runTests() {
             sendMessage(ws, 'chat', { text: `/findnote ${noteTitle}` });
             await waitForMessageType(ws, 'found_notes');
             
-            // Wait for the reply message (skip any available_commands)
-            let replyResponse;
-            do {
-                replyResponse = await waitForMessageType(ws, 'reply');
-            } while (!replyResponse.text.includes('Found note'));
+            // Wait for the reply message
+            const replyResponse = await waitForMessageType(ws, 'reply');
+            console.log('Got reply:', replyResponse.text);
             
             // Wait a bit for the available_commands to be sent automatically
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -253,7 +175,7 @@ async function runTests() {
             
             // Start note creation to enter confirmation state
             sendMessage(ws, 'chat', { text: `/createnote ${noteTitle}` });
-            await waitForNonCommandMessage(ws); // Confirmation prompt
+            await waitForMessageType(ws, 'reply'); // Confirmation prompt
             await new Promise(resolve => setTimeout(resolve, 200)); // Wait for auto-updated commands
             
             // Request available commands during confirmation
@@ -284,33 +206,57 @@ async function runTests() {
             console.log('--- Testing automatic command updates ---');
             
             // Start in main menu - should have main menu commands
+            console.log('--- Step 1: Getting initial commands ---');
             sendMessage(ws, 'get_commands');
             let response = await waitForMessageType(ws, 'available_commands');
+            console.log('--- Initial commands response:', JSON.stringify(response, null, 2));
             let commandNames = response.commands.map(cmd => cmd.command);
+            console.log('--- Initial command names:', commandNames);
             assert(commandNames.includes('/createnote'), 'Should start with main menu commands');
             
             // Create a note to enter confirmation state
+            console.log('--- Step 2: Creating note to enter confirmation state ---');
             sendMessage(ws, 'chat', { text: `/createnote ${noteTitle}` });
-            await waitForMessageType(ws, 'reply'); // Confirmation prompt
-            await new Promise(resolve => setTimeout(resolve, 200)); // Wait for auto-updated commands
+            console.log('--- Sent /createnote command, waiting for reply ---');
+            
+            let replyResponse = await waitForMessageType(ws, 'reply');
+            console.log('--- Got reply after /createnote:', JSON.stringify(replyResponse, null, 2));
+            
+            console.log('--- Waiting 200ms for auto-updated commands ---');
+            await new Promise(resolve => setTimeout(resolve, 200));
             
             // Should now have confirmation commands
+            console.log('--- Step 3: Getting commands in confirmation state ---');
             sendMessage(ws, 'get_commands');
             response = await waitForMessageType(ws, 'available_commands');
+            console.log('--- Confirmation state commands response:', JSON.stringify(response, null, 2));
             commandNames = response.commands.map(cmd => cmd.command);
+            console.log('--- Confirmation state command names:', commandNames);
             assert(commandNames.includes('yes'), 'Should have confirmation commands after state change');
             assert(!commandNames.includes('/createnote'), 'Should NOT have main menu commands in confirmation state');
             
             // Confirm the note creation
+            console.log('--- Step 4: Confirming note creation ---');
             sendMessage(ws, 'chat', { text: 'yes' });
-            await waitForMessageType(ws, 'created_note');
-            await waitForMessageType(ws, 'reply'); // Reply
-            await new Promise(resolve => setTimeout(resolve, 200)); // Wait for auto-updated commands
+            console.log('--- Sent yes confirmation, waiting for created_note ---');
+            
+            let createdNoteResponse = await waitForMessageType(ws, 'created_note');
+            console.log('--- Got created_note response:', JSON.stringify(createdNoteResponse, null, 2));
+            
+            console.log('--- Waiting for reply after note creation ---');
+            let finalReplyResponse = await waitForMessageType(ws, 'reply');
+            console.log('--- Got final reply:', JSON.stringify(finalReplyResponse, null, 2));
+            
+            console.log('--- Waiting 200ms for auto-updated commands ---');
+            await new Promise(resolve => setTimeout(resolve, 200));
             
             // Should be back to main menu commands
+            console.log('--- Step 5: Getting final commands after confirmation ---');
             sendMessage(ws, 'get_commands');
             response = await waitForMessageType(ws, 'available_commands');
+            console.log('--- Final commands response:', JSON.stringify(response, null, 2));
             commandNames = response.commands.map(cmd => cmd.command);
+            console.log('--- Final command names:', commandNames);
             assert(commandNames.includes('/createnote'), 'Should return to main menu commands after confirmation');
             assert(!commandNames.includes('yes'), 'Should NOT have confirmation commands after confirmation');
             
@@ -325,7 +271,7 @@ async function runTests() {
             
             // Create a note first
             sendMessage(ws, 'chat', { text: `/createnote ${noteTitle}` });
-            await waitForNonCommandMessage(ws); // Confirmation prompt
+            await waitForMessageType(ws, 'reply'); // Confirmation prompt
             sendMessage(ws, 'chat', { text: 'yes' });
             await waitForMessageType(ws, 'created_note');
             await clearMessageQueue(ws);
@@ -333,19 +279,35 @@ async function runTests() {
             console.log('--- Testing story editing commands ---');
             
             // Find the note and enter edit mode
+            console.log('--- Step 1: Finding note to enter edit mode ---');
             sendMessage(ws, 'chat', { text: `/findnote ${noteTitle}` });
-            await waitForMessageType(ws, 'found_notes');
-            await waitForMessageType(ws, 'reply');
+            console.log('--- Sent /findnote command, waiting for found_notes ---');
+            
+            let foundNotesResponse = await waitForMessageType(ws, 'found_notes');
+            console.log('--- Got found_notes response:', JSON.stringify(foundNotesResponse, null, 2));
+            
+            let findReplyResponse = await waitForMessageType(ws, 'reply');
+            console.log('--- Got find reply:', JSON.stringify(findReplyResponse, null, 2));
+            
+            console.log('--- Waiting 100ms for state to settle ---');
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Start editing
+            console.log('--- Step 2: Starting edit mode ---');
             sendMessage(ws, 'chat', { text: '/editdescription' });
-            await waitForNonCommandMessage(ws);
+            console.log('--- Sent /editdescription command, waiting for non-command message ---');
+            
+            let editResponse = await waitForMessageType(ws, 'reply');
+            console.log('--- Got edit response:', JSON.stringify(editResponse, null, 2));
+            
+            console.log('--- Waiting 100ms for state to settle ---');
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Request available commands during editing
+            console.log('--- Step 3: Getting commands in story editing state ---');
             sendMessage(ws, 'get_commands');
             const response = await waitForMessageType(ws, 'available_commands');
+            console.log('--- Story editing commands response:', JSON.stringify(response, null, 2));
             
             // Should have story editing commands
             const commandNames = response.commands.map(cmd => cmd.command);

@@ -1,9 +1,21 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_FILE = process.env.NODE_ENV === 'test'
-  ? path.join(__dirname, 'notes.test.json')
-  : path.join(__dirname, 'notes.json');
+// Determine the data file based on environment and test suite
+function getDataFile() {
+  if (process.env.NODE_ENV === 'test') {
+    // Check for specific test suite data file
+    const testSuite = process.env.TEST_SUITE;
+    if (testSuite) {
+      return path.join(__dirname, `notes.${testSuite}.json`);
+    }
+    // Fallback to general test file
+    return path.join(__dirname, 'notes.test.json');
+  }
+  return path.join(__dirname, 'notes.json');
+}
+
+const DATA_FILE = getDataFile();
 
 const NoteManager = {
   notes: [],
