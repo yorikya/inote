@@ -23,6 +23,7 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+        cache-dependency-path: 'android/native-gradle-node-folder/app/src/main/assets/nodejs-project/package-lock.json'
         
     - name: Install dependencies
       run: |
