@@ -1,0 +1,26 @@
+{
+  "name": "inote",
+  "version": "1.0.0",
+  "description": "Interactive Note Management System with Context-Aware Commands",
+  "private": true,
+  "scripts": {
+    "test": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:all",
+    "test:quick": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:quick",
+    "test:context": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:context",
+    "test:all": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:all",
+    "install:nodejs": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuri_appsfrnd/inote.git"
+  },
+  "keywords": [
+    "notes",
+    "nodejs",
+    "websocket",
+    "context-aware",
+    "commands"
+  ],
+  "author": "yuri_appsfrnd",
+  "license": "MIT"
+}
