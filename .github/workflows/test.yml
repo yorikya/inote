@@ -1,0 +1,54 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        npm install
+        
+    - name: Run quick-test.js
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        node test/quick-test.js
+        
+    - name: Run simple-test.js
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        node test/simple-test.js
+        
+    - name: Run context-commands-test.js
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        node test/context-commands-test.js
+        
+    - name: Run all tests together
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        echo "Running all tests in sequence..."
+        node test/quick-test.js && echo "✓ quick-test.js passed"
+        node test/simple-test.js && echo "✓ simple-test.js passed"  
+        node test/context-commands-test.js && echo "✓ context-commands-test.js passed"
+        echo "🎉 All tests passed!"

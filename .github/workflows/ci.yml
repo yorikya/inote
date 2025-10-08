@@ -1,0 +1,98 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        npm install
+        
+    - name: Run quick-test.js
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        echo "🧪 Running quick-test.js..."
+        timeout 60 node test/quick-test.js
+        echo "✅ quick-test.js completed"
+        
+    - name: Run simple-test.js  
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        echo "🧪 Running simple-test.js..."
+        timeout 120 node test/simple-test.js
+        echo "✅ simple-test.js completed"
+        
+    - name: Run context-commands-test.js
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        echo "🧪 Running context-commands-test.js..."
+        timeout 60 node test/context-commands-test.js
+        echo "✅ context-commands-test.js completed"
+        
+    - name: Test Summary
+      if: always()
+      run: |
+        echo "📊 Test Summary for Node.js ${{ matrix.node-version }}"
+        echo "All test files have been executed"
+        
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        npm install
+        
+    - name: Check for syntax errors
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        echo "🔍 Checking for syntax errors..."
+        node -c min.js
+        node -c CommandRouter.js
+        node -c StateManager.js
+        node -c NoteManager.js
+        node -c AIService.js
+        node -c ImageManager.js
+        echo "✅ No syntax errors found"
+        
+    - name: Validate test files
+      run: |
+        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
+        echo "🔍 Validating test files..."
+        node -c test/quick-test.js
+        node -c test/simple-test.js
+        node -c test/context-commands-test.js
+        echo "✅ All test files are valid"
