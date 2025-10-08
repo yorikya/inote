@@ -7,7 +7,7 @@ WebSocket message handling compatible with the frontend.
 */
 
 const http = require('http');
-const url = require('path');
+const url = require('url');
 const path = require('path');
 const WebSocket = require('ws');
 
@@ -118,6 +118,11 @@ wss.on('error', (error) => {
 
 function send(ws, obj) { try { ws.send(JSON.stringify(obj)); } catch (e) { console.error('send err', e); } }
 
+function sendUpdatedCommands(ws) {
+  const commands = CommandRouter.getAvailableCommands(ws, StateManager);
+  send(ws, { type: 'available_commands', commands });
+}
+
 async function handleChat(ws, o) {
   const state = StateManager.getState(ws);
   const text = o.text || '';
@@ -200,10 +205,12 @@ async function handleChat(ws, o) {
             send(ws, { type: 'reply', text: 'Note not found.' });
           }
           StateManager.initializeState(ws);
+          sendUpdatedCommands(ws);
           return;
         }
       }
       StateManager.initializeState(ws); // Reset state
+      sendUpdatedCommands(ws);
       return;
     }
     
@@ -273,10 +280,12 @@ async function handleChat(ws, o) {
             send(ws, { type: 'reply', text: 'Note not found.' });
           }
           StateManager.initializeState(ws);
+          sendUpdatedCommands(ws);
           return;
         }
       }
       StateManager.initializeState(ws); // Reset state
+      sendUpdatedCommands(ws);
       return;
     } else if (lowerText === 'no') {
       // If user says no to adding image, we should remove it
@@ -293,6 +302,7 @@ async function handleChat(ws, o) {
       }
       send(ws, { type: 'reply', text: 'Operation cancelled.' });
       StateManager.initializeState(ws); // Reset state
+      sendUpdatedCommands(ws);
       return;
     }
   }
@@ -327,6 +337,7 @@ async function handleChat(ws, o) {
       send(ws, { type: 'created_note', note: newNote });
       send(ws, { type: 'reply', text: `Sub-note created successfully! ID: ${newNote.id}, Title: '${text}'` });
       StateManager.initializeState(ws); // Reset state
+      sendUpdatedCommands(ws);
       return;
     }
     
@@ -381,6 +392,7 @@ async function handleChat(ws, o) {
                 data: { id: noteToDelete.id, title: noteToDelete.title },
               },
             });
+            sendUpdatedCommands(ws);
             send(ws, { type: 'reply', text: `Are you sure you want to delete note '${noteToDelete.title}'? (yes/no)` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
@@ -390,6 +402,7 @@ async function handleChat(ws, o) {
           const noteToEdit = state.findContext.selectedNote;
           if (noteToEdit) {
             StateManager.setState(ws, { mode: 'story_editing', storyEditingNoteId: noteToEdit.id, descriptionBuffer: '' });
+            sendUpdatedCommands(ws);
             send(ws, { type: 'reply', text: `Editing description for '${noteToEdit.title}'. Type your description. Say /stopediting when you are done.` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
@@ -415,6 +428,7 @@ async function handleChat(ws, o) {
                 data: { id: noteToMark.id, title: noteToMark.title },
               },
             });
+            sendUpdatedCommands(ws);
             send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToMark.title}' as done? (yes/no)` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
@@ -424,6 +438,7 @@ async function handleChat(ws, o) {
           const noteToTalk = state.findContext.selectedNote;
           if (noteToTalk) {
             StateManager.setState(ws, { mode: 'ai_conversation', aiConversationNoteId: noteToTalk.id });
+            sendUpdatedCommands(ws);
             send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}'. Say /stop to end.` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
@@ -435,6 +450,7 @@ async function handleChat(ws, o) {
             const selectedNote = state.findContext.notes.find(n => String(n.id) === noteId);
             if (selectedNote) {
               StateManager.setState(ws, { findContext: { ...state.findContext, selectedNote } });
+              sendUpdatedCommands(ws);
               send(ws, { type: 'reply', text: `Selected note '${selectedNote.title}'.` });
             } else {
               send(ws, { type: 'reply', text: 'Note not found in current context.' });
@@ -490,6 +506,7 @@ async function handleChat(ws, o) {
             data: { title },
           },
         });
+        sendUpdatedCommands(ws);
         send(ws, { type: 'reply', text: `Do you want to create a note with title '${title}'? (yes/no)` });
         return;
       case '/findnote':
@@ -497,6 +514,7 @@ async function handleChat(ws, o) {
         const notes = NoteManager.findByTitle(parsed.args.join(' '));
         StateManager.setState(ws, { mode: 'find_context', findContext: { notes, selectedNote: notes.length === 1 ? notes[0] : null } });
         send(ws, { type: 'found_notes', notes });
+        sendUpdatedCommands(ws);
         if (notes.length === 1) {
           send(ws, { type: 'reply', text: `Found note '${notes[0].title}'. What would you like to do?` });
         } else {
@@ -511,6 +529,7 @@ async function handleChat(ws, o) {
           const notesToShow = [note, ...children];
           StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: note } });
           send(ws, { type: 'found_notes', notes: notesToShow });
+          sendUpdatedCommands(ws);
           send(ws, { type: 'reply', text: `Found note '${note.title}'. What would you like to do?` });
         } else {
           send(ws, { type: 'reply', text: 'Note not found.' });
@@ -536,6 +555,7 @@ async function handleChat(ws, o) {
 
           if (parentNote) {
             StateManager.setState(ws, { mode: 'pending_subnote_creation', findContext: { ...state.findContext, selectedNote: parentNote } });
+            sendUpdatedCommands(ws);
             send(ws, { type: 'reply', text: 'What is the title of the sub-note?' });
           } else {
             send(ws, { type: 'reply', text: 'No parent note selected. Use /findnote first or specify a parent note ID.' });
@@ -575,6 +595,7 @@ async function handleChat(ws, o) {
 wss.on('connection', (ws) => {
   console.log('Client connected');
   StateManager.initializeState(ws);
+  sendUpdatedCommands(ws);
 
   ws.on('message', async (msg) => {
     let o = null;
@@ -583,7 +604,7 @@ wss.on('connection', (ws) => {
     try {
       switch (o.type) {
         case 'chat': await handleChat(ws, o); break;
-        case 'get_commands': send(ws, { type: 'available_commands', commands: CommandRouter.getAvailableCommands() }); break;
+        case 'get_commands': send(ws, { type: 'available_commands', commands: CommandRouter.getAvailableCommands(ws, StateManager) }); break;
         case 'get_all_notes': send(ws, { type: 'all_notes', notes: NoteManager.getAll() }); break;
         case 'create_note': send(ws, { type: 'created_note', note: NoteManager.create(o.title || 'Untitled', o.description || '', o.parent_id || null) }); break;
         case 'update_note': const updated = NoteManager.update(o.id, o.patch || {}); if (updated) send(ws, { type: 'note_updated', note: updated }); else send(ws, { type: 'reply', text: 'Note not found' }); break;
