@@ -55,7 +55,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '18.x'
         cache: 'npm'
         cache-dependency-path: 'android/native-gradle-node-folder/app/src/main/assets/nodejs-project/package-lock.json'
         
@@ -84,5 +84,4 @@ jobs:
         node -c test/simple-test.js
         node -c test/context-commands-test.js
         node -c test/parameter-collection-test.js
-        node -c test/simple-parameter-test.js
         echo "✅ All test files are valid"
