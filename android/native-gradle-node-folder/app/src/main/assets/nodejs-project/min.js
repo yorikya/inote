@@ -22,65 +22,18 @@ const ImageManager = require('./ImageManager');
 // HTTP server
 const server = http.createServer((req, res) => {
   const p = url.parse(req.url).pathname;
-  // Handle image upload
-  if (p === '/uploadimage' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString(); // Convert Buffer to string
-    });
-    req.on('end', () => {
-      try {
-        const data = JSON.parse(body);
-        const { noteId, imageData, filename } = data;
-        
-        // Check if note exists
-        const note = NoteManager.findById(noteId)[0];
-        if (!note) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Note not found' }));
-          return;
-        }
-        
-        // Check image limit
-        if (ImageManager.hasReachedImageLimit(noteId)) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Maximum 5 images per note' }));
-          return;
-        }
-        
-        // Convert base64 to buffer
-        const imageBuffer = Buffer.from(imageData, 'base64');
-        
-        // Save image
-        const imagePath = ImageManager.saveImage(noteId, imageBuffer, filename);
-        
-        // Update note with image path
-        const images = note.images || [];
-        images.push(imagePath);
-        NoteManager.update(noteId, { images });
-        
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
-          imagePath,
-          note: NoteManager.findById(noteId)[0]
-        }));
-      } catch (error) {
-        console.error('Error uploading image:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Failed to upload image' }));
-      }
-    });
-    return;
-  }
+  
   
   // Serve images saved under /image/<rel>
   if (p && p.startsWith('/image/')) {
-    const rel = decodeURIComponent(p.replace('/image/', ''));
-    const fp = path.join(__dirname, rel);
+    const filename = decodeURIComponent(p.replace('/image/', ''));
+    const fp = path.join(__dirname, 'images', filename);
     if (require('fs').existsSync(fp)) {
+      const ext = path.extname(fp).toLowerCase();
+      const map = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.gif': 'image/gif' };
+      const type = map[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': type });
       const stream = require('fs').createReadStream(fp);
-      res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
       stream.pipe(res);
       return;
     }
@@ -267,8 +220,25 @@ async function handleChat(ws, o) {
         case 'create_note':
           const newNote = NoteManager.create(data.title, data.description, data.parent_id);
           send(ws, { type: 'created_note', note: newNote });
-          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}` });
-          break;
+          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}, Title: '${newNote.title}'` });
+          
+          // Set the context to the newly created note
+          StateManager.setState(ws, {
+            mode: 'find_context',
+            findContext: {
+              selectedNote: newNote,
+              results: [newNote]
+            }
+          });
+          
+          // Send follow-up message with suggested actions
+          send(ws, { 
+            type: 'reply', 
+            text: `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` 
+          });
+          sendUpdatedCommands(ws);
+          return; // Don't call initializeState
+          
         case 'delete_note':
           NoteManager.delete(data.id);
           send(ws, { type: 'note_deleted', id: data.id });
@@ -326,7 +296,6 @@ async function handleChat(ws, o) {
             send(ws, { type: 'reply', text: 'Note not found.' });
           }
           StateManager.initializeState(ws);
-          sendUpdatedCommands(ws);
           return;
         }
       }
@@ -342,8 +311,25 @@ async function handleChat(ws, o) {
         case 'create_note':
           const newNote = NoteManager.create(data.title, data.description, data.parent_id);
           send(ws, { type: 'created_note', note: newNote });
-          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}` });
-          break;
+          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}, Title: '${newNote.title}'` });
+          
+          // Set the context to the newly created note
+          StateManager.setState(ws, {
+            mode: 'find_context',
+            findContext: {
+              selectedNote: newNote,
+              results: [newNote]
+            }
+          });
+          
+          // Send follow-up message with suggested actions
+          send(ws, { 
+            type: 'reply', 
+            text: `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` 
+          });
+          sendUpdatedCommands(ws);
+          return; // Don't call initializeState
+          
         case 'delete_note':
           NoteManager.delete(data.id);
           send(ws, { type: 'note_deleted', id: data.id });
@@ -457,7 +443,20 @@ async function handleChat(ws, o) {
       const newNote = NoteManager.create(text, '', parentNote.id);
       send(ws, { type: 'created_note', note: newNote });
       send(ws, { type: 'reply', text: `Sub-note created successfully! ID: ${newNote.id}, Title: '${text}'` });
-      StateManager.initializeState(ws); // Reset state
+      
+      // Return to parent note context
+      StateManager.setState(ws, {
+        mode: 'find_context',
+        findContext: {
+          selectedNote: parentNote,
+          results: [parentNote]
+        }
+      });
+      
+      send(ws, { 
+        type: 'reply', 
+        text: `Returned to parent note '${parentNote.title}' context. What would you like to do? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` 
+      });
       sendUpdatedCommands(ws);
       return;
     }
@@ -469,6 +468,7 @@ async function handleChat(ws, o) {
         action: 'create_note',
         data: { title: text, parent_id: parentNote.id },
       },
+      findContext: state.findContext // Preserve the parent context
     });
     send(ws, { type: 'reply', text: `Create sub-note '${text}' under '${parentNote.title}'? (yes/no)` });
     return;
@@ -808,7 +808,7 @@ wss.on('connection', (ws) => {
           const sanitizedName = imageName.replace(/[^a-zA-Z0-9._-]/g, '_');
           const fileName = `note_${noteId}_${timestamp}_${sanitizedName}`;
           const filePath = path.join(imagesDir, fileName);
-          const relativeFilePath = `images/${fileName}`;
+          const relativeFilePath = fileName;
 
           try {
             // Decode base64 and save
@@ -836,7 +836,8 @@ wss.on('connection', (ws) => {
           break;
         }
         
-        case 'request_file_picker': send(ws, { type: 'reply', text: 'Native file picker not available in Node backend (handled by Android)' }); break;
+        
+        
         default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
       }
     } catch (e) { console.error('message handling error', e); send(ws, { type: 'reply', text: 'Internal server error' }); } 

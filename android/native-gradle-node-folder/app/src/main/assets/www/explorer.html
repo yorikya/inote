@@ -55,6 +55,30 @@
     cursor: pointer;
   }
   
+  .image-preview-container .nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .image-preview-container .nav-btn:hover {
+    background: rgba(0,0,0,0.8);
+  }
+  .image-preview-container .prev-btn {
+    left: 5px;
+  }
+  .image-preview-container .next-btn {
+    right: 5px;
+  }
+  
   .image-preview-container {
     position: relative;
     width: 100%;
@@ -274,12 +298,197 @@ const showPendingBtn = document.getElementById("showPendingBtn");
 let allNotes = [];
 let filteredNotes = [];
 let currentFilter = 'all';
+let noteImageStates = {}; // Track current image index for each note
+let imageRotationIntervals = {}; // Track auto-rotation intervals
 
 // WebSocket connection
 let ws = null;
 
+// ========== IMAGE ROTATION FUNCTIONS (GLOBAL SCOPE) ==========
+
+// Initialize image state for a note
+function initializeNoteImageState(noteId, imageCount) {
+  console.log(`[ImageRotation] Initializing state for note ${noteId}, imageCount: ${imageCount}`);
+  if (!noteImageStates[noteId]) {
+    noteImageStates[noteId] = {
+      currentIndex: 0,
+      totalImages: imageCount
+    };
+    console.log(`[ImageRotation] Created new state for note ${noteId}:`, noteImageStates[noteId]);
+  } else {
+    console.log(`[ImageRotation] State already exists for note ${noteId}:`, noteImageStates[noteId]);
+  }
+}
+
+// Manual image rotation (via arrow buttons) - MUST BE GLOBAL
+window.rotateImage = function(noteId, direction) {
+  console.log(`[ImageRotation] rotateImage called - noteId: ${noteId}, direction: ${direction}`);
+  
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) {
+    console.error(`[ImageRotation] Note not found: ${noteId}`);
+    return;
+  }
+  
+  if (!note.images || note.images.length <= 1) {
+    console.log(`[ImageRotation] Note ${noteId} has ${note.images ? note.images.length : 0} images, rotation not needed`);
+    return;
+  }
+  
+  console.log(`[ImageRotation] Note ${noteId} has ${note.images.length} images`);
+  
+  // Initialize state if needed
+  initializeNoteImageState(noteId, note.images.length);
+  
+  // Update index
+  const state = noteImageStates[noteId];
+  const oldIndex = state.currentIndex;
+  state.currentIndex = (state.currentIndex + direction + state.totalImages) % state.totalImages;
+  
+  console.log(`[ImageRotation] Index changed from ${oldIndex} to ${state.currentIndex}`);
+  console.log(`[ImageRotation] New image path: ${note.images[state.currentIndex]}`);
+  
+  // Update the image display
+  updateNoteImage(noteId, note.images[state.currentIndex], state.currentIndex);
+};
+
+// Auto-rotate images for a note
+function startImageRotation(noteId) {
+  console.log(`[ImageRotation] Starting auto-rotation for note ${noteId}`);
+  
+  const note = allNotes.find(n => n.id === noteId);
+  if (!note) {
+    console.error(`[ImageRotation] Cannot start rotation - note not found: ${noteId}`);
+    return;
+  }
+  
+  if (!note.images || note.images.length <= 1) {
+    console.log(`[ImageRotation] Note ${noteId} has ${note.images ? note.images.length : 0} images, auto-rotation not needed`);
+    return;
+  }
+  
+  console.log(`[ImageRotation] Note ${noteId} has ${note.images.length} images, starting auto-rotation`);
+  
+  // Clear any existing interval
+  if (imageRotationIntervals[noteId]) {
+    console.log(`[ImageRotation] Clearing existing interval for note ${noteId}`);
+    clearInterval(imageRotationIntervals[noteId]);
+  }
+  
+  // Initialize state
+  initializeNoteImageState(noteId, note.images.length);
+  
+  // Start rotation (every 3 seconds)
+  imageRotationIntervals[noteId] = setInterval(() => {
+    console.log(`[ImageRotation] Auto-rotating note ${noteId}`);
+    window.rotateImage(noteId, 1);
+  }, 3000);
+  
+  console.log(`[ImageRotation] Auto-rotation interval set for note ${noteId}, interval ID:`, imageRotationIntervals[noteId]);
+}
+
+// Stop image rotation for a note
+function stopImageRotation(noteId) {
+  console.log(`[ImageRotation] Stopping rotation for note ${noteId}`);
+  if (imageRotationIntervals[noteId]) {
+    clearInterval(imageRotationIntervals[noteId]);
+    delete imageRotationIntervals[noteId];
+    console.log(`[ImageRotation] Rotation stopped for note ${noteId}`);
+  } else {
+    console.log(`[ImageRotation] No active rotation found for note ${noteId}`);
+  }
+}
+
+// Update note image display
+function updateNoteImage(noteId, imagePath, currentIndex) {
+  console.log(`[ImageRotation] Updating image for note ${noteId}, index: ${currentIndex}, path: ${imagePath}`);
+  
+  const imgElement = document.getElementById(`note-img-${noteId}`);
+  const counterElement = document.querySelector(`[data-note-id="${noteId}"] .image-counter`);
+  
+  if (!imgElement) {
+    console.error(`[ImageRotation] Image element not found: note-img-${noteId}`);
+    return;
+  }
+  
+  console.log(`[ImageRotation] Found image element for note ${noteId}`);
+  
+  const displayPath = convertImagePathForDisplay(imagePath);
+  console.log(`[ImageRotation] Display path: ${displayPath}`);
+  
+  if (displayPath) {
+    imgElement.src = displayPath;
+    console.log(`[ImageRotation] Image src updated to: ${displayPath}`);
+    
+    // Update content-uri and image-path attributes if needed
+    if (imagePath.startsWith('content://')) {
+      imgElement.setAttribute('data-content-uri', imagePath);
+      console.log(`[ImageRotation] Set content-uri attribute`);
+    } else if (imagePath.startsWith('/storage/') || imagePath.startsWith('/sdcard/')) {
+      imgElement.setAttribute('data-image-path', imagePath);
+      console.log(`[ImageRotation] Set image-path attribute`);
+    }
+  } else {
+    console.error(`[ImageRotation] No display path available for: ${imagePath}`);
+  }
+  
+  // Update counter
+  if (counterElement) {
+    const note = allNotes.find(n => n.id === noteId);
+    if (note && note.images) {
+      const counterText = `${currentIndex + 1} / ${note.images.length}`;
+      counterElement.textContent = counterText;
+      console.log(`[ImageRotation] Counter updated to: ${counterText}`);
+    }
+  } else {
+    console.warn(`[ImageRotation] Counter element not found for note ${noteId}`);
+  }
+}
+
+// Start auto-rotation for all notes with multiple images
+function startAllImageRotations() {
+  console.log(`[ImageRotation] Starting auto-rotation for all notes`);
+  console.log(`[ImageRotation] Total filtered notes: ${filteredNotes.length}`);
+  
+  // Clear all existing intervals
+  Object.keys(imageRotationIntervals).forEach(noteId => {
+    console.log(`[ImageRotation] Clearing existing interval for note ${noteId}`);
+    stopImageRotation(noteId);
+  });
+  
+  // Count notes with multiple images
+  let multiImageCount = 0;
+  
+  // Start rotation for notes with multiple images
+  filteredNotes.forEach(note => {
+    if (note.images && note.images.length > 1) {
+      multiImageCount++;
+      console.log(`[ImageRotation] Note ${note.id} has ${note.images.length} images - starting rotation`);
+      startImageRotation(note.id);
+    } else {
+      console.log(`[ImageRotation] Note ${note.id} has ${note.images ? note.images.length : 0} images - skipping rotation`);
+    }
+  });
+  
+  console.log(`[ImageRotation] Started auto-rotation for ${multiImageCount} notes with multiple images`);
+  console.log(`[ImageRotation] Active intervals:`, Object.keys(imageRotationIntervals));
+}
+
+// Stop all image rotations
+function stopAllImageRotations() {
+  console.log(`[ImageRotation] Stopping all image rotations`);
+  const intervalCount = Object.keys(imageRotationIntervals).length;
+  Object.keys(imageRotationIntervals).forEach(noteId => {
+    stopImageRotation(noteId);
+  });
+  console.log(`[ImageRotation] Stopped ${intervalCount} rotation intervals`);
+}
+
+// ========== END IMAGE ROTATION FUNCTIONS ==========
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+  console.log('[Init] DOM Content Loaded');
   initializeWebSocket();
   setupEventListeners();
   loadNotes();
@@ -476,13 +685,18 @@ function loadNotes() {
           });
         }
 
-// Render notes
+// Render notes (updated to start auto-rotation)
 function renderNotes() {
+  console.log('[Render] Starting to render notes');
+  console.log('[Render] Filtered notes count:', filteredNotes.length);
+  
   loadingState.style.display = 'none';
   
   if (filteredNotes.length === 0) {
+    console.log('[Render] No notes to display');
     emptyState.style.display = 'block';
     notesGrid.style.display = 'none';
+    stopAllImageRotations();
     return;
   }
   
@@ -496,12 +710,19 @@ function renderNotes() {
     return dateB - dateA;
   });
   
-  notesGrid.innerHTML = sortedNotes.map(note => createNoteCard(note)).join('');
+  console.log('[Render] Sorted notes:', sortedNotes.length);
   
-  // No image rotation needed
+  notesGrid.innerHTML = sortedNotes.map(note => createNoteCard(note)).join('');
+  console.log('[Render] Note cards created and inserted into DOM');
+  
+  // Start auto-rotation for notes with multiple images
+  setTimeout(() => {
+    console.log('[Render] Starting auto-rotation after 500ms delay');
+    startAllImageRotations();
+  }, 500); // Small delay to ensure DOM is ready
 }
 
-// Create note card HTML
+// Create note card HTML (updated with better logging)
 function createNoteCard(note) {
   const isCompleted = note.done === true;
   const isParent = !note.parent_id;
@@ -510,7 +731,7 @@ function createNoteCard(note) {
   const hasImages = note.images && note.images.length > 0;
   const imageCount = hasImages ? note.images.length : 0;
   
-  // Image detection
+  console.log(`[CreateCard] Creating card for note ${note.id}, images: ${imageCount}`);
   
   const statusText = isCompleted ? 'Completed' : 'Pending';
   const statusClass = isCompleted ? 'completed' : 'pending';
@@ -520,65 +741,47 @@ function createNoteCard(note) {
   // Generate image preview HTML
   let imagePreviewHtml = '';
   if (hasImages) {
-    if (imageCount === 1) {
-      // Single image - show normally
-      const firstImage = note.images[0];
-      const displayPath = convertImagePathForDisplay(firstImage);
+    const firstImage = note.images[0];
+    const displayPath = convertImagePathForDisplay(firstImage);
+    
+    if (displayPath) {
+      const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
+      const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
+        `data-image-path="${firstImage}"` : '';
       
-      if (displayPath) {
-        const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
-        const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
-          `data-image-path="${firstImage}"` : '';
-        
+      if (imageCount === 1) {
         imagePreviewHtml = `
           <div class="note-images" data-note-id="${note.id}">
             <div class="image-preview-container">
               <img class="image-preview-img" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
-                   onerror="this.parentElement.innerHTML='<div class=\\'image-error\\'>📷 Image not found<br><small>Click to manage</small></div>'"
+                   onerror="this.parentElement.innerHTML='<div class='image-error'>📷 Image not found<br><small>Click to manage</small></div>'"
                    onclick="showImageManagement('${note.id}')">
             </div>
           </div>
         `;
       } else {
         imagePreviewHtml = `
-          <div class="note-images" onclick="showImageManagement('${note.id}')">
-            <div class="image-preview image-placeholder">
-              📷 1 image attached<br>
-              <small style="font-size: 12px; opacity: 0.7;">Click to manage images</small>
+          <div class="note-images" data-note-id="${note.id}">
+            <div class="image-preview-container">
+              <img class="image-preview-img" id="note-img-${note.id}" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
+                   onerror="this.parentElement.innerHTML='<div class='image-error'>📷 ${imageCount} images attached<br><small>Click to manage</small></div>'"
+                   onclick="showImageManagement('${note.id}')">
+              <div class="image-counter">1 / ${imageCount}</div>
+              <button class="nav-btn prev-btn" onclick="event.stopPropagation(); rotateImage('${note.id}', -1)">&#10094;</button>
+              <button class="nav-btn next-btn" onclick="event.stopPropagation(); rotateImage('${note.id}', 1)">&#10095;</button>
             </div>
           </div>
         `;
       }
     } else {
-      // Multiple images - show first image with counter (no rotation)
-      const firstImage = note.images[0];
-      const displayPath = convertImagePathForDisplay(firstImage);
-      
-      if (displayPath) {
-        const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
-        const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
-          `data-image-path="${firstImage}"` : '';
-        
-        imagePreviewHtml = `
-          <div class="note-images" data-note-id="${note.id}">
-            <div class="image-preview-container">
-              <img class="image-preview-img" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
-                   onerror="this.parentElement.innerHTML='<div class=\\'image-error\\'>📷 ${imageCount} images attached<br><small>Click to manage</small></div>'"
-                   onclick="showImageManagement('${note.id}')">
-              <div class="image-counter">${imageCount} images</div>
-            </div>
+      imagePreviewHtml = `
+        <div class="note-images" onclick="showImageManagement('${note.id}')">
+          <div class="image-preview image-placeholder">
+            📷 ${imageCount} image${imageCount > 1 ? 's' : ''} attached<br>
+            <small style="font-size: 12px; opacity: 0.7;">Click to manage images</small>
           </div>
-        `;
-      } else {
-        imagePreviewHtml = `
-          <div class="note-images" onclick="showImageManagement('${note.id}')">
-            <div class="image-preview image-placeholder">
-              📷 ${imageCount} images attached<br>
-              <small style="font-size: 12px; opacity: 0.7;">Click to manage images</small>
-            </div>
-          </div>
-        `;
-      }
+        </div>
+      `;
     }
   }
   
@@ -643,12 +846,13 @@ function convertImagePathForDisplay(imagePath) {
     return placeholder;
   }
   
-  // Handle relative paths (legacy) - these are likely broken links from old storage approach
+  // Handle relative paths (legacy and new)
   if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
-    // Don't try to access relative paths - they're likely from old storage attempts
-    // Return an error placeholder instead
-    const errorPlaceholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2ZmNjY2NiIvPjx0ZXh0IHg9IjUwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+QnJva2VuPC90ZXh0Pjx0ZXh0IHg9IjUwIiB5PSI2MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TGluazwvdGV4dD48L3N2Zz4=';
-    return errorPlaceholder;
+    // If it's an old path with "images/", remove it.
+    if (imagePath.startsWith('images/')) {
+        imagePath = imagePath.substring('images/'.length);
+    }
+    return `/image/${imagePath}`;
   }
   
   return imagePath;
@@ -928,8 +1132,6 @@ function deleteNote(noteId) {
     alert('Delete note functionality needs to be implemented');
   }
 }
-
-// Image rotation removed - showing static first image only
 
 // Handle window resize
 window.addEventListener('resize', function() {

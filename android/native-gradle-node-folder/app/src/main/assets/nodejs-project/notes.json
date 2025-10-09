@@ -1,32 +1,18 @@
-[
-  {
-    "id": "1",
-    "title": "Test Note Delete",
-    "description": "",
-    "parent_id": null,
-    "done": false,
-    "images": [],
-    "deleted": false,
-    "creation_date": "2025-10-07T08:33:03.807Z"
-  },
-  {
-    "id": "2",
-    "title": "Test Note Delete",
-    "description": "",
-    "parent_id": null,
-    "done": false,
-    "images": [],
-    "deleted": false,
-    "creation_date": "2025-10-07T08:33:44.783Z"
-  },
-  {
-    "id": "3",
-    "title": "Test Note Select 30004",
-    "description": "",
-    "parent_id": null,
-    "done": false,
-    "images": [],
-    "deleted": false,
-    "creation_date": "2025-10-07T16:46:58.365Z"
-  }
-]
+{
+  "notes": [
+    {
+      "id": "1",
+      "title": "Fiat tipo maintenance",
+      "description": "",
+      "parent_id": null,
+      "done": false,
+      "images": [
+        "note_1_1760041242067_Screenshot_2025-10-09_at_21.58.41.png",
+        "note_1_1760041325728_screenshot_1758395336.png"
+      ],
+      "deleted": false,
+      "creation_date": "2025-10-09T17:45:13.847Z"
+    }
+  ],
+  "latestNoteId": 1
+}

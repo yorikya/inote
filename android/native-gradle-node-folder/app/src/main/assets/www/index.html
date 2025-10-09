@@ -160,16 +160,7 @@
                 <div class="upload-hint">Supports JPG, PNG, GIF (max 5 images)</div>
               </div>
               
-              <!-- Alternative file selection for WebView environments -->
-              <div id="webviewAlternatives" style="display: none; margin-top: 10px; text-align: center;">
-                <p style="color: #666; font-size: 14px; margin: 10px 0;">File picker not working? Try these alternatives:</p>
-                <button onclick="createMockFileSelection()" style="margin: 5px; padding: 8px 16px; background: #ff6b35; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                  🧪 Use Mock File (Testing)
-                </button>
-                <button onclick="showManualFileInput()" style="margin: 5px; padding: 8px 16px; background: #1f6feb; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                  📂 Try Alternative Picker
-                </button>
-              </div>
+              
               
       <input type="file" id="fileInput" class="file-input" multiple accept="image/*" style="display: none;">
       <div id="previewContainer" class="preview-container"></div>
@@ -257,6 +248,10 @@ const Settings = {
   geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4", // Default API key
   autoConfirm: false
 };
+
+// Global variables
+let currentNoteId = null;  // Store the current note ID for uploads
+let selectedFiles = [];    // Store selected files for upload
 
 // Global auto confirmation state
 var GlobalAutoConfirm = {
@@ -524,6 +519,7 @@ commandsOverlay.onclick = () => {
   commandsOverlay.classList.remove("show");
 };
 
+
 // Handle command button clicks
 document.addEventListener('click', (e) => {
   console.log("Click detected on:", e.target.tagName, "classes:", e.target.className);
@@ -540,12 +536,22 @@ document.addEventListener('click', (e) => {
       // Add the command to the input field
       inputEl.value = command;
       console.log("Set input value to:", inputEl.value);
+      
       // Add to command history
       addToCommandHistory(command);
+      
       // Close the popup
       commandsPopup.classList.remove("show");
       commandsOverlay.classList.remove("show");
-      // Focus on the input field
+      
+      // Auto-submit the command (this was missing!)
+      console.log("DEBUG: Auto-submitting command:", command);
+      
+      // Trigger the form submit event
+      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+      formEl.dispatchEvent(submitEvent);
+      
+      // Focus on the input field for next command
       inputEl.focus();
     } else {
       console.log("No command attribute found");
@@ -787,75 +793,103 @@ function connect(){
   };
   ws.onclose= ()=>updateConnectionStatus(false);
   ws.onerror= e=>updateConnectionStatus(false);
+  
+  // In the ws.onmessage handler, add this case after the existing cases:
+  
   ws.onmessage = ev=>{
-    try{ 
-      const msg=JSON.parse(ev.data); 
-      if(msg.type==='reply') {
-        // All upload handling is now done natively in DroidScript
-        // No need for HTML upload modal
-        addMsg(msg.text,'bot');
+      try{ 
+        const msg=JSON.parse(ev.data); 
+        console.log("DEBUG: Received WebSocket message:", msg.type, msg);
         
-        // Update mode based on backend message
-        updateModeFromMessage(msg.text);
+        if(msg.type==='reply') {
+          // Filter out system messages that shouldn't be shown to user
+          const systemMessages = [
+            'Note created successfully',
+            'Note updated successfully', 
+            'Note deleted successfully',
+            'נוצר בהצלחה',
+            'עודכן בהצלחה',
+            'נמחק בהצלחה'
+          ];
+          
+          // Check if this is a system message
+          const isSystemMessage = systemMessages.some(sysMsg => msg.text.includes(sysMsg));
+          
+          // Only display if it's not a system message
+          if (!isSystemMessage) {
+            addMsg(msg.text,'bot');
+            
+            // Update mode based on backend message
+            updateModeFromMessage(msg.text);
+            
+            // Speak bot responses if TTS is enabled
+            if (useTTS.checked) {
+              speakText(msg.text);
+            }
+          }
+        }
+        else if(msg.type==='request_image_upload') {
+          console.log("DEBUG: Handling request_image_upload message");
+          console.log("DEBUG: Note ID:", msg.data.noteId);
+          console.log("DEBUG: Current image count:", msg.data.currentImageCount);
+          
+          // Show the upload modal for this note
+          showUploadModal(msg.data.noteId);
+          addMsg("📷 Please select an image to upload", "sys");
+        }
+        else if(msg.type==='trigger_image_upload') {
+          console.log('DEBUG: Received trigger_image_upload with noteId:', msg.noteId);
+          currentNoteId = msg.noteId;  // Store the noteId globally
+          showUploadModal(msg.noteId);
+        }
+        else if(msg.type==='debug_notes') {
+          notesDisplay.textContent = msg.notes;
+          notesDisplay.style.display = "block";
+        }
+        else if(msg.type==='debug_cleared') {
+          addMsg("All notes cleared successfully!", "sys");
+          // Hide notes display if it's showing
+          notesDisplay.style.display = "none";
+          showNotes.textContent = "Show Notes (Debug)";
+        }
         
-        // Simple message handling (no more graph popups)
-        
-      }
-      else if(msg.type==='debug_notes') {
-        notesDisplay.textContent = msg.notes;
-        notesDisplay.style.display = "block";
-      }
-      else if(msg.type==='debug_cleared') {
-        addMsg("All notes cleared successfully!", "sys");
-        // Hide notes display if it's showing
-        notesDisplay.style.display = "none";
-        showNotes.textContent = "Show Notes (Debug)";
-      }
-      else if(msg.type==='file_selected') {
-        console.log("DEBUG: File selected from native picker:", msg.imagePath);
-        // Handle the selected file from native picker
-        handleNativeFileSelection(msg.imagePath, msg.noteId);
-      }
-      else if(msg.type==='show_html_file_picker') {
-        console.log("DEBUG: Showing HTML file picker for note:", msg.noteId);
-        // Show the upload modal directly in the same page
-        showUploadModal(msg.noteId);
-        addMsg("📷 Select images using the file picker below", "sys");
-      }
-      else if(msg.type==='available_commands') {
-        // Handle dynamic commands from backend
-        availableCommands = msg.commands || [];
-        commandsLoaded = true;
-        console.log("Loaded dynamic commands:", availableCommands);
-        // Commands loaded
-        // Commands loaded successfully
-      }
-      else if(msg.type==='set_auto_confirm') {
-        // Handle set_auto_confirm message from backend
-        GlobalAutoConfirm.enabled = msg.enabled;
-        Settings.autoConfirm = msg.enabled; // Update Settings object
-        GlobalAutoConfirm.updateUI();
-      }
-      else if(msg.type==='auto_confirm_status') {
-        // Update UI when auto-confirmation status changes
-        GlobalAutoConfirm.enabled = msg.enabled;
-        Settings.autoConfirm = msg.enabled; // Update Settings object
-        GlobalAutoConfirm.updateUI();
-      }
-      else if(msg.type==='found_notes') {
-        // Handle found_notes message with human-readable text
-        if (msg.notes && msg.notes.length > 0) {
-          // Notes found - let the backend handle the display
-          // This message is usually followed by a reply message
-        } else {
-          // No notes found - show human-readable message
-          addMsg('No notes have been found', 'bot');
+        else if(msg.type==='available_commands') {
+          // Handle dynamic commands from backend
+          availableCommands = msg.commands || [];
+          commandsLoaded = true;
+          console.log("Loaded dynamic commands:", availableCommands);
+        }
+        else if(msg.type==='set_auto_confirm') {
+          // Handle set_auto_confirm message from backend
+          GlobalAutoConfirm.enabled = msg.enabled;
+          Settings.autoConfirm = msg.enabled;
+          GlobalAutoConfirm.updateUI();
+        }
+        else if(msg.type==='auto_confirm_status') {
+          // Update UI when auto-confirmation status changes
+          GlobalAutoConfirm.enabled = msg.enabled;
+          Settings.autoConfirm = msg.enabled;
+          GlobalAutoConfirm.updateUI();
+        }
+        else if(msg.type==='found_notes') {
+          // Handle found_notes message with human-readable text
+          if (msg.notes && msg.notes.length > 0) {
+            // Notes found - let the backend handle the display
+          } else {
+            // No notes found - show human-readable message
+            addMsg('No notes have been found', 'bot');
+          }
+        }
+        else {
+          console.log("DEBUG: Unhandled message type:", msg.type);
+          addMsg(ev.data,'sys');
         }
       }
-      else addMsg(ev.data,'sys'); 
-    }
-    catch{ addMsg(ev.data,'bot'); }
-  };
+      catch(error){ 
+        console.log("DEBUG: Error parsing WebSocket message:", error);
+        addMsg(ev.data,'bot'); 
+      }
+    };
 }
 
 
@@ -1207,15 +1241,11 @@ connect();
 hideTipAfterDelay();
 
 /* ---------- Upload Modal Functionality ---------- */
-let currentNoteId = null;
-let selectedFiles = [];
-
 // DEPRECATED: HTML upload modal no longer used
 // All image uploads now handled natively in DroidScript
 function showUploadModal(noteId) {
-  console.log("DEBUG: HTML upload modal disabled - using native DroidScript file picker");
-  addMsg("📁 Image upload is now handled natively by DroidScript", "sys");
-  return; // Exit early - don't show HTML modal
+  currentNoteId = noteId;
+  document.getElementById('uploadModal').classList.add('show');
   
   // Setup file input handler
   const fileInput = document.getElementById('fileInput');
@@ -1330,105 +1360,7 @@ function selectImages() {
   }
 }
 
-// WebView fallback for file selection
-function showWebViewFilePickerFallback() {
-  console.log("DEBUG: Showing WebView file picker fallback");
-  
-  // Show the alternative options
-  const alternatives = document.getElementById('webviewAlternatives');
-  if (alternatives) {
-    alternatives.style.display = 'block';
-    console.log("DEBUG: Showing WebView alternatives UI");
-  }
-  
-  // Show message to user
-  addMsg("📷 File picker may not work properly in this WebView environment.", "sys");
-  addMsg("Please try the alternative options shown below the upload area.", "sys");
-}
 
-// Show manual file input as alternative
-function showManualFileInput() {
-  console.log("DEBUG: Showing manual file input alternative");
-  
-  // Create a new file input that might work better in WebView
-  const existingInput = document.getElementById('fileInput');
-  if (existingInput) {
-    existingInput.remove();
-  }
-  
-  // Create a new visible file input
-  const newInput = document.createElement('input');
-  newInput.type = 'file';
-  newInput.id = 'fileInputAlt';
-  newInput.multiple = true;
-  newInput.accept = 'image/*';
-  newInput.style.cssText = 'margin: 10px; padding: 5px; border: 1px solid #444; background: #1a1d21; color: #e6e6e6; border-radius: 4px;';
-  
-  // Add event listeners
-  newInput.addEventListener('change', function(event) {
-    console.log("DEBUG: Alternative file input change event");
-    if (event.target.files && event.target.files.length > 0) {
-      console.log("DEBUG: Files selected via alternative input:", event.target.files.length);
-      handleFileSelect(event);
-    }
-  });
-  
-  // Add to upload area
-  const uploadArea = document.querySelector('.upload-body');
-  if (uploadArea) {
-    const label = document.createElement('p');
-    label.textContent = 'Alternative file picker:';
-    label.style.cssText = 'color: #a0a0a0; margin: 10px 0 5px 0; font-size: 14px;';
-    
-    uploadArea.appendChild(label);
-    uploadArea.appendChild(newInput);
-    
-    addMsg("📂 Alternative file picker added. Please try selecting files with it.", "sys");
-  }
-}
-
-// Alternative file selection using DroidScript native methods
-function selectImagesNative() {
-  console.log("DEBUG: selectImagesNative called");
-  
-  // Send message to DroidScript to open native file picker
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    const message = {
-      type: 'request_file_picker',
-      noteId: currentNoteId
-    };
-    console.log("DEBUG: Requesting native file picker");
-    ws.send(JSON.stringify(message));
-  } else {
-    console.log("DEBUG: WebSocket not connected, falling back to mock");
-    selectImages();
-  }
-}
-
-// Handle file selection from native picker
-function handleNativeFileSelection(imagePath, noteId) {
-  console.log("DEBUG: handleNativeFileSelection called with:", imagePath, noteId);
-  
-  // Create a mock file object from the native selection
-  const mockFile = {
-    name: imagePath.split('/').pop() || 'selected_image.jpg',
-    type: 'image/jpeg',
-    size: 1024,
-    path: imagePath
-  };
-  
-  // Add to selected files
-  selectedFiles = [mockFile];
-  console.log("DEBUG: Added native file to selectedFiles:", selectedFiles.length);
-  
-  // Update preview
-  updatePreview();
-  
-  // Enable upload button
-  document.getElementById('uploadBtn').disabled = false;
-  
-  addMsg("📷 Image selected from gallery", "sys");
-}
 
 // Close upload modal
 function closeUploadModal() {
@@ -1571,100 +1503,40 @@ function createMockFileSelection() {
   addMsg("📷 1 image selected (mock file for testing)", "sys");
 }
 
-// Upload images
 function uploadImages() {
-  console.log("DEBUG: uploadImages called");
-  console.log("DEBUG: selectedFiles length:", selectedFiles.length);
-  console.log("DEBUG: selectedFiles content:", selectedFiles);
-  console.log("DEBUG: currentNoteId:", currentNoteId);
-  console.log("DEBUG: WebSocket state:", ws ? ws.readyState : 'no ws');
-  
   if (selectedFiles.length === 0) {
-    console.log("DEBUG: Upload cancelled - no files selected");
-    addMsg("❌ No files selected. Please select images first.", "sys");
+    addMsg("❌ No files selected.", "sys");
     return;
   }
-  
   if (!currentNoteId) {
-    console.log("DEBUG: Upload cancelled - no note ID");
-    addMsg("❌ No note ID found. Please try again.", "sys");
+    addMsg("❌ No note selected for upload.", "sys");
     return;
   }
-  
-  addMsg(`📤 Uploading ${selectedFiles.length} image(s) to note ${currentNoteId}...`, "sys");
-  
-  // Convert images to base64 and send via WebSocket
-  selectedFiles.forEach((file, index) => {
-    console.log("DEBUG: Processing file", index, ":", file.name);
-    
-    // For native files (from DroidScript picker), use the existing path
-    if (file.path) {
-      console.log("DEBUG: Processing native file:", file.path);
-      // Send the native file path directly
+
+  addMsg(`📤 Uploading ${selectedFiles.length} image(s)...`, "sys");
+
+  let uploadedCount = 0;
+  const totalFiles = selectedFiles.length;
+
+  selectedFiles.forEach(file => {
+    resizeAndCompressImage(file, (base64Data) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         const message = {
-          type: 'upload_file',
+          type: 'image_upload',
           noteId: currentNoteId,
-          filename: file.name,
-          fileData: null, // No base64 data needed for native files
-          imagePath: file.path
+          imageName: file.name,
+          imageData: base64Data
         };
-        console.log("DEBUG: Sending WebSocket message for native file:", file.name);
+        addMsg('DEBUG: Sending image upload message: ' + JSON.stringify(message).substring(0, 100) + '...', 'sys');
         ws.send(JSON.stringify(message));
-      } else {
-        console.log("DEBUG: WebSocket not connected, state:", ws ? ws.readyState : 'no ws');
-      }
-    }
-    // For mock files, create mock base64 data
-    else if (file.name && file.name.startsWith('test_image_')) {
-      const mockBase64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='; // 1x1 transparent PNG
-      const imagePath = `images/note_${currentNoteId}_${Date.now()}_${index}.jpg`;
-      
-      console.log("DEBUG: Sending WebSocket message for mock file:", file.name);
-      // Send via WebSocket to DroidScript app
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        const message = {
-          type: 'upload_file',
-          noteId: currentNoteId,
-          filename: file.name,
-          fileData: mockBase64Data,
-          imagePath: imagePath
-        };
-        console.log("DEBUG: WebSocket message:", JSON.stringify(message).substring(0, 100) + "...");
-        ws.send(JSON.stringify(message));
-      } else {
-        console.log("DEBUG: WebSocket not connected, state:", ws ? ws.readyState : 'no ws');
-      }
-    } else {
-      // For real files, resize and compress before uploading
-      console.log("DEBUG: Processing real file with resizing:", file.name);
-      resizeAndCompressImage(file, function(resizedBase64) {
-        const imagePath = `images/note_${currentNoteId}_${Date.now()}_${index}.jpg`;
-        
-        console.log("DEBUG: Sending WebSocket message for resized file:", file.name);
-        // Send via WebSocket to DroidScript app
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          const message = {
-            type: 'upload_file',
-            noteId: currentNoteId,
-            filename: file.name,
-            fileData: resizedBase64,
-            imagePath: imagePath
-          };
-          console.log("DEBUG: WebSocket message:", JSON.stringify(message).substring(0, 100) + "...");
-          ws.send(JSON.stringify(message));
-        } else {
-          console.log("DEBUG: WebSocket not connected, state:", ws ? ws.readyState : 'no ws');
+
+        uploadedCount++;
+        if (uploadedCount === totalFiles) {
+          closeUploadModal();
         }
-      });
-    }
+      }
+    });
   });
-  
-  // Close modal after upload
-  setTimeout(() => {
-    closeUploadModal();
-    addMsg("✅ Images uploaded successfully!", "sys");
-  }, 1000);
 }
 
 // Image resizing and compression function
