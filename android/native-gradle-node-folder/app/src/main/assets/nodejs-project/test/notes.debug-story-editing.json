@@ -2,13 +2,13 @@
   "notes": [
     {
       "id": "1",
-      "title": "Test Note",
+      "title": "Debug Story Editing",
       "description": "",
       "parent_id": null,
       "done": false,
       "images": [],
       "deleted": false,
-      "creation_date": "2025-10-08T14:01:18.260Z"
+      "creation_date": "2025-10-09T06:19:30.283Z"
     }
   ],
   "latestNoteId": 1

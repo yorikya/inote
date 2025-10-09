@@ -7,10 +7,10 @@ function getDataFile() {
     // Check for specific test suite data file
     const testSuite = process.env.TEST_SUITE;
     if (testSuite) {
-      return path.join(__dirname, `notes.${testSuite}.json`);
+      return path.join(__dirname, 'test', `notes.${testSuite}.json`);
     }
     // Fallback to general test file
-    return path.join(__dirname, 'notes.test.json');
+    return path.join(__dirname, 'test', 'notes.test.json');
   }
   return path.join(__dirname, 'notes.json');
 }

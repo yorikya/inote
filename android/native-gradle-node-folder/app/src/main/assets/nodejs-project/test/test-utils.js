@@ -13,7 +13,7 @@ function getNextPort() {
 
 // Clean up test data file
 function cleanupTestData(testSuite) {
-    const notesFile = path.join(__dirname, `../notes.${testSuite}.json`);
+    const notesFile = path.join(__dirname, `notes.${testSuite}.json`);
     if (fs.existsSync(notesFile)) {
         fs.writeFileSync(notesFile, '{"notes": [], "latestNoteId": 0}');
         console.log(`Cleaned up notes.${testSuite}.json`);
