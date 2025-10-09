@@ -12,6 +12,7 @@ const path = require('path');
 const WebSocket = require('ws');
 
 const PORT = process.env.NODE_PORT || 30000;
+const HOST = '0.0.0.0'; // Bind to all network interfaces instead of just localhost
 
 const NoteManager = require('./NoteManager');
 const CommandRouter = require('./CommandRouter');
@@ -851,13 +852,12 @@ wss.on('connection', (ws) => {
   // Connection established - no need to send message to user
 });
 
-// Only start the server if not being imported as a module
-if (require.main === module) {
-  server.listen(PORT, () => {
-    const { port } = server.address();
-    console.log(`NODE_PORT=${port}`);
-    console.log(`min.js backend listening on port ${port}`);
-  });
-}
+// Start the server with HOST binding
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
+  console.log(`WebSocket server ready on ws://${HOST}:${PORT}`);
+});
 
-module.exports = { server, wss, NoteManager }
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { server, wss };
+}

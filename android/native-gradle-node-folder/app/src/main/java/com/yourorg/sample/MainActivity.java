@@ -8,6 +8,7 @@ import android.view.View;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -37,14 +38,54 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         final WebView webView = (WebView) findViewById(R.id.webview);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient());
+        
+        // ============================================
+        // CRITICAL: Enable DOM Storage for localStorage
+        // ============================================
+        WebSettings webSettings = webView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);  // Enable localStorage
+        webSettings.setDatabaseEnabled(true);     // Enable database storage
+        
+        // Additional settings for better WebView performance
+        webSettings.setAllowFileAccess(true);
+        webSettings.setAllowContentAccess(true);
+        webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
+        
+        // Enable debugging (optional, useful for development)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
+        
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                Log.d("WebView", "Page loaded: " + url);
+            }
+            
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                super.onReceivedError(view, errorCode, description, failingUrl);
+                Log.e("WebView", "Error loading page: " + description);
+            }
+        });
+        
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                Log.d("WebView Console", consoleMessage.message() + " -- From line "
+                        + consoleMessage.lineNumber() + " of "
+                        + consoleMessage.sourceId());
+                return true;
+            }
+        });
 
         // Wait for 2 seconds before loading the URL to ensure Node.js server is running
         new Handler().postDelayed(new Runnable() {
             @Override
             public void run() {
+                Log.d("MainActivity", "Loading WebView URL: http://127.0.0.1:30000");
                 webView.loadUrl("http://127.0.0.1:30000");
             }
         }, 2000);
@@ -57,7 +98,12 @@ public class MainActivity extends AppCompatActivity {
                     // The path where we expect the node project to be at runtime.
                     String nodeDir = getApplicationContext().getFilesDir().getAbsolutePath()+"/nodejs-project";
                     String wwwDir = getApplicationContext().getFilesDir().getAbsolutePath()+"/www";
+                    
+                    Log.d("MainActivity", "Node directory: " + nodeDir);
+                    Log.d("MainActivity", "WWW directory: " + wwwDir);
+                    
                     if (wasAPKUpdated()) {
+                        Log.d("MainActivity", "APK was updated, copying assets...");
                         // Recursively delete any existing nodejs-project and www folders.
                         File nodeDirReference = new File(nodeDir);
                         if (nodeDirReference.exists()) {
@@ -71,14 +117,18 @@ public class MainActivity extends AppCompatActivity {
                         copyAssetFolder(getApplicationContext().getAssets(), "nodejs-project", nodeDir);
                         copyAssetFolder(getApplicationContext().getAssets(), "www", wwwDir);
                         saveLastUpdateTime();
+                        Log.d("MainActivity", "Assets copied successfully");
+                    } else {
+                        Log.d("MainActivity", "APK not updated, using existing assets");
                     }
+                    
+                    Log.d("MainActivity", "Starting Node.js with min.js");
                     startNodeWithArguments(new String[]{"node",
                             nodeDir+"/min.js"
                     });
                 }
             }).start();
         }
-
     }
 
     /**
@@ -97,6 +147,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (PackageManager.NameNotFoundException e) {
             e.printStackTrace();
         }
+        Log.d("MainActivity", "Previous update time: " + previousLastUpdateTime + ", Current: " + lastUpdateTime);
         return (lastUpdateTime != previousLastUpdateTime);
     }
 
@@ -112,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = prefs.edit();
         editor.putLong("NODEJS_MOBILE_APK_LastUpdateTime", lastUpdateTime);
         editor.commit();
+        Log.d("MainActivity", "Saved update time: " + lastUpdateTime);
     }
 
     private static boolean deleteFolderRecursively(File file) {
@@ -186,5 +238,4 @@ public class MainActivity extends AppCompatActivity {
             out.write(buffer, 0, read);
         }
     }
-
 }
