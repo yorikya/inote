@@ -339,6 +339,9 @@ await runTestWithDedicatedServer('should find a note by title', async (ws, creat
         console.log('--- AI Test: Starting AI conversation ---');
         sendMessage(ws, 'chat', { text: '/talkai' });
         
+        // Wait for available_commands first (sent by sendUpdatedCommands)
+        await waitForMessageType(ws, 'available_commands');
+        
         // Wait for the reply message, ignoring "Note created successfully" and "Found note" messages
         let response;
         do {
@@ -866,15 +869,18 @@ await runTestWithDedicatedServer('should upload an image to a note', async (ws, 
         
         // Find the note and start AI conversation
         sendMessage(ws, 'chat', { text: `/findnote ${noteTitle}` });
-        await waitForMessageSequence(ws, ['found_notes', 'reply', 'available_commands']);
+        await waitForMessageType(ws, 'found_notes');
+        await waitForMessageType(ws, 'available_commands'); 
+        await waitForMessageType(ws, 'reply');
         
         // Start AI conversation
         sendMessage(ws, 'chat', { text: '/talkai' });
-        await waitForMessageType(ws, 'reply');
         
-        // Request available commands during AI conversation
-        sendMessage(ws, 'get_commands');
+        // Wait for the available_commands message sent by sendUpdatedCommands (AI conversation commands)
         const response = await waitForMessageType(ws, 'available_commands');
+        
+        // Wait for the reply message
+        await waitForMessageType(ws, 'reply');
         
         console.log('--- Available commands in AI conversation state:', response.commands);
         
@@ -898,17 +904,20 @@ await runTestWithDedicatedServer('should upload an image to a note', async (ws, 
     await runTestWithDedicatedServer('should return sub-note creation commands when creating sub-note', async (ws, createTestNote, uniqueId) => {
         const noteTitle = `Test Note Sub ${uniqueId}`;
         const noteId = await createTestNote(noteTitle);
-        await clearMessageQueue(ws);
         
         console.log('--- Testing sub-note creation commands ---');
         
+        // Consume the available_commands message sent after note creation
+        await waitForMessageType(ws, 'available_commands');
+        
         // Start sub-note creation
         sendMessage(ws, 'chat', { text: `/createsubnote ${noteId}` });
-        await waitForMessageType(ws, 'reply');
         
-        // Request available commands during sub-note creation
-        sendMessage(ws, 'get_commands');
+        // Wait for the available_commands message sent by sendUpdatedCommands (sub-note creation commands)
         const response = await waitForMessageType(ws, 'available_commands');
+        
+        // Wait for the reply message
+        await waitForMessageType(ws, 'reply');
         
         console.log('--- Available commands in sub-note creation state:', response.commands);
         

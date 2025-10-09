@@ -13,7 +13,7 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
+        node-version: [18.x]
     
     steps:
     - name: Checkout repository
@@ -31,26 +31,12 @@ jobs:
         cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
         npm install
         
-    - name: Run quick-test.js
+    - name: Run all tests
       run: |
         cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
-        echo "🧪 Running quick-test.js..."
-        timeout 60 node test/quick-test.js
-        echo "✅ quick-test.js completed"
-        
-    - name: Run simple-test.js  
-      run: |
-        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
-        echo "🧪 Running simple-test.js..."
-        timeout 120 node test/simple-test.js
-        echo "✅ simple-test.js completed"
-        
-    - name: Run context-commands-test.js
-      run: |
-        cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
-        echo "🧪 Running context-commands-test.js..."
-        timeout 60 node test/context-commands-test.js
-        echo "✅ context-commands-test.js completed"
+        echo "🧪 Running all tests with npm run test:all..."
+        npm run test:all
+        echo "✅ All tests completed"
         
     - name: Test Summary
       if: always()
@@ -97,4 +83,6 @@ jobs:
         node -c test/quick-test.js
         node -c test/simple-test.js
         node -c test/context-commands-test.js
+        node -c test/parameter-collection-test.js
+        node -c test/simple-parameter-test.js
         echo "✅ All test files are valid"

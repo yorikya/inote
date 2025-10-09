@@ -219,7 +219,7 @@
             try {
                 // Connect to WebSocket if not already connected
                 if (!window.ws || window.ws.readyState !== WebSocket.OPEN) {
-                    window.ws = new WebSocket('ws://localhost:8080');
+                    window.ws = new WebSocket('ws://localhost:30000');
                     
                     window.ws.onopen = function() {
                         console.log('WebSocket connected for upload');

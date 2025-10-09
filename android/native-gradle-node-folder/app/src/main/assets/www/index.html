@@ -81,6 +81,35 @@
   .command-category h4 { margin:0 0 12px 0; font-size:14px; color:#e6e6e6; font-weight:600; }
   .command-btn { display:block; width:100%; padding:8px 12px; margin-bottom:6px; background:#2a2f36; color:#e6e6e6; border:1px solid #444; border-radius:6px; cursor:pointer; font-size:14px; text-align:left; transition:all 0.2s ease; }
   .command-btn:hover { background:#1f6feb; border-color:#1f6feb; }
+  
+  /* Connection Status Styles */
+  .connection-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 8px;
+  }
+  .connection-label {
+    font-size: 12px;
+    color: #a0a0a0;
+    font-weight: 500;
+  }
+  .connection-led {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #ff4444;
+    border: 2px solid #333;
+    transition: all 0.3s ease;
+  }
+  .connection-led.connected {
+    background: #44ff44;
+    box-shadow: 0 0 8px rgba(68, 255, 68, 0.5);
+  }
+  .connection-led.disconnected {
+    background: #ff4444;
+    box-shadow: 0 0 8px rgba(255, 68, 68, 0.3);
+  }
 </style>
 </head>
 <body>
@@ -89,6 +118,10 @@
     <button id="menuBtn" title="Settings">☰</button>
     <h1>Note Secretary</h1>
     <div class="spacer"></div>
+    <div class="connection-status">
+      <span class="connection-label">Online Status:</span>
+      <div id="connectionStatus" class="connection-led" title="Connection Status"></div>
+    </div>
     <label for="lang">Lang:</label>
     <select id="lang">
       <option value="en" selected>EN</option>
@@ -107,9 +140,9 @@
   </form>
   
   <div class="row" style="padding: 8px 16px; border-top: 1px solid #222;">
-    <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
-    <button id="micBtn" title="Speech to text">🎤 Speak</button>
     <button id="helpBtn" title="Quick commands">💡 Commands</button>
+    <button id="micBtn" title="Speech to text">🎤 Speak</button>
+    <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
   </div>
 </div>
 
@@ -338,6 +371,20 @@ function loadCommandHistory() {
 // Function to get command history
 function getCommandHistory() {
   return commandHistory;
+}
+
+// Function to update connection status LED
+function updateConnectionStatus(connected) {
+  const statusLed = document.getElementById('connectionStatus');
+  if (statusLed) {
+    if (connected) {
+      statusLed.className = 'connection-led connected';
+      statusLed.title = 'Connected to server';
+    } else {
+      statusLed.className = 'connection-led disconnected';
+      statusLed.title = 'Disconnected from server';
+    }
+  }
 }
 
 // Function to load available commands from backend
@@ -714,7 +761,7 @@ clearChatHistoryBtn.onclick = () => {
 /* ---------- WebSocket connection to DroidScript backend ---------- */
 let ws;
 function connect(){
-  // Connect to DroidScript WebSocket server on localhost:8080
+  // Connect to DroidScript WebSocket server on localhost:30000
   // Auto-detect host: use 10.0.2.2 inside Android emulator, otherwise localhost
   const host = (function(){
     try {
@@ -727,18 +774,19 @@ function connect(){
       return h || '127.0.0.1';
     } catch (e) { return '127.0.0.1'; }
   })();
-  const url = `ws://${host}:8080`;
+  const url = `ws://${host}:30000`;
   ws = new WebSocket(url);
   ws.onopen = ()=>{
-    addMsg('Connected to DroidScript backend','sys');
+    // Update connection LED to green
+    updateConnectionStatus(true);
     // Load available commands from backend
     loadAvailableCommands();
     
     // Check for URL parameters to auto-execute commands
     handleUrlParameters();
   };
-  ws.onclose= ()=>addMsg('Disconnected from backend','sys');
-  ws.onerror= e=>addMsg('WebSocket error','sys');
+  ws.onclose= ()=>updateConnectionStatus(false);
+  ws.onerror= e=>updateConnectionStatus(false);
   ws.onmessage = ev=>{
     try{ 
       const msg=JSON.parse(ev.data); 
@@ -793,6 +841,16 @@ function connect(){
         GlobalAutoConfirm.enabled = msg.enabled;
         Settings.autoConfirm = msg.enabled; // Update Settings object
         GlobalAutoConfirm.updateUI();
+      }
+      else if(msg.type==='found_notes') {
+        // Handle found_notes message with human-readable text
+        if (msg.notes && msg.notes.length > 0) {
+          // Notes found - let the backend handle the display
+          // This message is usually followed by a reply message
+        } else {
+          // No notes found - show human-readable message
+          addMsg('No notes have been found', 'bot');
+        }
       }
       else addMsg(ev.data,'sys'); 
     }
@@ -1143,6 +1201,8 @@ function hideTipAfterDelay() {
 // Connect to DroidScript backend on page load
 initializeSettings();
 loadCommandHistory();
+// Initialize connection LED as disconnected
+updateConnectionStatus(false);
 connect();
 hideTipAfterDelay();
 

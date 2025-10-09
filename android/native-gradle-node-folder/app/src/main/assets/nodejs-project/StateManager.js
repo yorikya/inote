@@ -36,6 +36,10 @@ const StateManager = {
   clearState(ws) {
     state.delete(ws);
   },
+
+  clearAllStates() {
+    state.clear();
+  },
 };
 
 module.exports = StateManager;

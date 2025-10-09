@@ -5,7 +5,7 @@ var WebSocketHandler = {
     // -------- WebSocket Server Configuration --------
     server: null,
     webView: null,
-    port: 8080,
+    port: 30000,
     Settings: { lang: "en", autoConfirm: false },
     
     // -------- Settings Initialization --------
