@@ -17,8 +17,9 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '18.x'
         cache: 'npm'
+        cache-dependency-path: 'android/native-gradle-node-folder/app/src/main/assets/nodejs-project/package-lock.json'
         
     - name: Install Node.js dependencies
       run: npm run install:nodejs
