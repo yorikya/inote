@@ -115,19 +115,17 @@
 <body>
 <div class="app">
   <header>
-    <button id="menuBtn" title="Settings">☰</button>
-    <h1>Note Secretary</h1>
+    <button id="menuBtn">☰</button>
     <div class="spacer"></div>
     <div class="connection-status">
-      <span class="connection-label">Online Status:</span>
-      <div id="connectionStatus" class="connection-led" title="Connection Status"></div>
+      <span class="connection-led" id="statusLed"></span>
+      <span id="statusText">Connecting...</span>
     </div>
-    <label for="lang">Lang:</label>
     <select id="lang">
-      <option value="en" selected>EN</option>
-      <option value="he">HE</option>
+      <option value="en-US">English</option>
+      <option value="he-IL">עברית</option>
     </select>
-    <button id="clear">Clear</button>
+    <button id="clearBtn" class="secondary" title="Clear chat messages">🗑️</button>
   </header>
 
   <p class="warn" id="tipSection">Tip: Try compact commands like <code>/createnote groceries</code> or <code>/findnote groceries</code>. For editing: <code>/findnote groceries</code> then <code>/editdescription</code>. To see all notes: <code>/showparents</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
@@ -140,7 +138,7 @@
   </form>
   
   <div class="row" style="padding: 8px 16px; border-top: 1px solid #222;">
-    <button id="helpBtn" title="Quick commands">💡 Commands</button>
+    <button id="helpBtn" class="secondary">Commands</button>
     <button id="micBtn" title="Speech to text">🎤 Speak</button>
     <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
   </div>
@@ -299,7 +297,7 @@ const logEl   = document.getElementById("log");
 const inputEl = document.getElementById("input");
 const formEl  = document.getElementById("chat");
 const langSel = document.getElementById("lang");
-const clearBtn= document.getElementById("clear");
+const clearBtn= document.getElementById("clearBtn");
 const micBtn  = document.getElementById("micBtn");
 const useTTS  = document.getElementById("useTTS");
 
@@ -370,13 +368,16 @@ function getCommandHistory() {
 
 // Function to update connection status LED
 function updateConnectionStatus(connected) {
-  const statusLed = document.getElementById('connectionStatus');
-  if (statusLed) {
+  const statusLed = document.getElementById('statusLed');
+  const statusText = document.getElementById('statusText');
+  if (statusLed && statusText) {
     if (connected) {
       statusLed.className = 'connection-led connected';
+      statusText.textContent = 'Connected';
       statusLed.title = 'Connected to server';
     } else {
       statusLed.className = 'connection-led disconnected';
+      statusText.textContent = 'Connecting...';
       statusLed.title = 'Disconnected from server';
     }
   }
@@ -464,8 +465,11 @@ langSel.onchange = () => {
   document.documentElement.dir = (Settings.lang === "he") ? "rtl" : "ltr";
 };
 clearBtn.onclick = () => { 
-  logEl.innerHTML = ""; 
-  clearChatHistory();
+  if (confirm("Are you sure you want to clear all chat messages? This action cannot be undone.")) {
+    logEl.innerHTML = ""; 
+    clearChatHistory();
+    addMsg("🗑️ Chat messages cleared", "sys");
+  }
 };
 
 /* ---------- Commands Popup Functionality ---------- */
@@ -544,23 +548,15 @@ document.addEventListener('click', (e) => {
       commandsPopup.classList.remove("show");
       commandsOverlay.classList.remove("show");
       
-      // Auto-submit the command (this was missing!)
-      console.log("DEBUG: Auto-submitting command:", command);
-      
-      // Trigger the form submit event
-      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-      formEl.dispatchEvent(submitEvent);
-      
-      // Focus on the input field for next command
+      // Focus on the input field for user to complete or send
       inputEl.focus();
-    } else {
-      console.log("No command attribute found");
-    }
-  } else {
-    // Check if it's a navigation button (don't log as error)
-    const navButton = e.target.closest('.nav-button');
-    if (!navButton) {
-      console.log("Not a command button");
+      
+      // Move cursor to end of text
+      inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+      
+      // Prevent event from bubbling
+      e.preventDefault();
+      e.stopPropagation();
     }
   }
 });
@@ -766,10 +762,25 @@ clearChatHistoryBtn.onclick = () => {
 
 /* ---------- WebSocket connection to DroidScript backend ---------- */
 let ws;
-function connect(){
+let reconnectInterval = 5000; // 5 seconds
+let reconnectTimer = null;
+let messageQueue = [];
+
+function connect() {
+  // Clear any existing reconnect timer
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  // If WebSocket is already connecting or open, do nothing
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+    return;
+  }
+
   // Connect to DroidScript WebSocket server on localhost:30000
   // Auto-detect host: use 10.0.2.2 inside Android emulator, otherwise localhost
-  const host = (function(){
+  const host = (function() {
     try {
       const h = window.location.hostname;
       // If page served from file:// or host is localhost, prefer localhost.
@@ -778,21 +789,56 @@ function connect(){
       // Detect common emulator UA substring
       if (navigator.userAgent && navigator.userAgent.indexOf('Android') !== -1) return '10.0.2.2';
       return h || '127.0.0.1';
-    } catch (e) { return '127.0.0.1'; }
+    } catch (e) {
+      return '127.0.0.1';
+    }
   })();
   const url = `ws://${host}:30000`;
   ws = new WebSocket(url);
-  ws.onopen = ()=>{
-    // Update connection LED to green
+
+  ws.onopen = () => {
     updateConnectionStatus(true);
-    // Load available commands from backend
+
+    // Process any queued messages
+    while (messageQueue.length > 0) {
+      const message = messageQueue.shift();
+      try {
+        ws.send(JSON.stringify(message));
+        addMsg(`✅ Sent queued message: "${message.text.substring(0, 30)}..."`, "sys");
+      } catch (error) {
+        addMsg(`Error sending queued message: ${error.message}`, "sys");
+        // If sending fails, put it back at the front of the queue
+        messageQueue.unshift(message);
+        // And close the connection to trigger a reconnect
+        ws.close();
+        break; // Exit the loop
+      }
+    }
+
     loadAvailableCommands();
-    
-    // Check for URL parameters to auto-execute commands
     handleUrlParameters();
+
+    const savedNoteId = localStorage.getItem('currentNoteId');
+    if (savedNoteId) {
+      ws.send(JSON.stringify({
+        type: 'restore_context',
+        noteId: savedNoteId
+      }));
+    }
   };
-  ws.onclose= ()=>updateConnectionStatus(false);
-  ws.onerror= e=>updateConnectionStatus(false);
+
+  ws.onclose = () => {
+    updateConnectionStatus(false);
+    if (!reconnectTimer) {
+        reconnectTimer = setTimeout(connect, reconnectInterval);
+    }
+  };
+
+  ws.onerror = e => {
+    updateConnectionStatus(false);
+    // onclose will be called next, which handles the reconnect logic.
+    // No need to add a message here to avoid duplicates.
+  };
   
   // In the ws.onmessage handler, add this case after the existing cases:
   
@@ -802,6 +848,29 @@ function connect(){
         console.log("DEBUG: Received WebSocket message:", msg.type, msg);
         
         if(msg.type==='reply') {
+          // Try to extract noteId from the message text, e.g., "(ID: 123)"
+          const idMatch = msg.text.match(/\(ID: (\d+)\)/);
+          if (idMatch && idMatch[1]) {
+            const noteId = idMatch[1];
+            currentNoteId = noteId;
+            localStorage.setItem('currentNoteId', currentNoteId);
+            addMsg(`📝 Note context automatically set to ID: ${currentNoteId}`, 'sys');
+          }
+
+          // Check for messages that imply the context should be cleared.
+          const clearContextMessages = [
+            'No parent note selected',
+            'No notes have been found',
+            'cleared successfully',
+            'Returned to main menu'
+          ];
+
+          if (clearContextMessages.some(m => msg.text.includes(m))) {
+            currentNoteId = null;
+            localStorage.removeItem('currentNoteId');
+            addMsg('📝 Note context cleared.', 'sys');
+          }
+
           // Filter out system messages that shouldn't be shown to user
           const systemMessages = [
             'Note created successfully',
@@ -840,6 +909,7 @@ function connect(){
         else if(msg.type==='trigger_image_upload') {
           console.log('DEBUG: Received trigger_image_upload with noteId:', msg.noteId);
           currentNoteId = msg.noteId;  // Store the noteId globally
+          localStorage.setItem('currentNoteId', currentNoteId); // Save to local storage
           showUploadModal(msg.noteId);
         }
         else if(msg.type==='debug_notes') {
@@ -900,25 +970,25 @@ formEl.addEventListener("submit", async (e) => {
   if (!text) return;
 
   addMsg(text, "you");
-  
+
   // Add to command history if it looks like a command
   if (isCommand(text)) {
     addToCommandHistory(text);
   }
-  
-  // Always send to backend - let backend handle story editing mode
+
   inputEl.value = "";
-  
-  // Send to Node.js backend via WebSocket for intent processing
+
+  const message = { type: 'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm };
+
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
-    const message = {type:'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm };
-    ws.send(JSON.stringify(message));
+      ws.send(JSON.stringify(message));
     } catch (error) {
       addMsg("Error sending message: " + error.message, "sys");
     }
   } else {
-    addMsg("Not connected to backend. Trying to reconnect...", "sys");
+    addMsg("Connection is down. Queuing message and attempting to reconnect...", "sys");
+    messageQueue.push(message);
     connect();
   }
   scrollToBottom();
@@ -1088,6 +1158,17 @@ function handleUrlParameters() {
     }
   }
 }
+
+// Reconnect when returning to the tab
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    // User returned to the tab, check if we need to reconnect
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      addMsg("👋 Welcome back! Reconnecting...", "sys");
+      connect();
+    }
+  }
+});
 
 /* ---------- Utilities ---------- */
 function addMsg(text, who) {
@@ -1616,6 +1697,23 @@ function resizeAndCompressImage(file, callback) {
   reader.onerror = function(e) {
     console.log("DEBUG: FileReader error loading file, using mock data");
     const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    callback(mockBase64);
+  };
+  reader.readAsDataURL(file);
+}
+
+
+</script>
+</body>
+</html>
+er.readAsDataURL(file);
+}
+
+
+</script>
+</body>
+</html>
+AfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
     callback(mockBase64);
   };
   reader.readAsDataURL(file);

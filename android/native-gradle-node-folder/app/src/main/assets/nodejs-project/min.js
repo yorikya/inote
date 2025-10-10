@@ -22,7 +22,8 @@ const ImageManager = require('./ImageManager');
 
 // HTTP server
 const server = http.createServer((req, res) => {
-  const p = url.parse(req.url).pathname;
+  const parsedUrl = url.parse(req.url);
+  const p = parsedUrl.pathname;
   
   
   // Serve images saved under /image/<rel>
@@ -45,10 +46,10 @@ const server = http.createServer((req, res) => {
 
   // Serve static frontend files from the www directory
   const wwwRoot = path.join(__dirname, '..', 'www');
-  let relPath = p === '/' ? '/index.html' : p;
+  let relPath = p === '/' ? '/index.html' : (p || '/index.html');
   // Strip leading slash
   if (relPath.startsWith('/')) relPath = relPath.slice(1);
-  const fp = path.join(wwwRoot, relPath || 'index.html');
+  const fp = path.join(wwwRoot, relPath);
   if (require('fs').existsSync(fp) && require('fs').statSync(fp).isFile()) {
     const ext = path.extname(fp).toLowerCase();
     const map = { '.html': 'text/html', '.htm': 'text/html', '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml' };
@@ -83,19 +84,60 @@ function sendUpdatedCommands(ws) {
   send(ws, { type: 'available_commands', commands });
 }
 
+function formatNoteTree(note, children) {
+  let result = '';
+  
+  // Format parent note with icon and styling
+  result += `📝 ${note.title} (ID: ${note.id})`;
+  
+  // Add parent indicator if it's a parent note
+  if (!note.parent_id) {
+    result += ' [Parent]';
+  }
+  
+  // Add description if exists
+  if (note.description && note.description.trim()) {
+    result += `\n   💬 ${note.description}`;
+  }
+  
+  // Add status if marked as done
+  if (note.is_done) {
+    result += '\n   ✅ Completed';
+  }
+  
+  // Add image count if any
+  const imageCount = ImageManager.getNoteImages(note.id).length;
+  if (imageCount > 0) {
+    result += `\n   📷 ${imageCount} image${imageCount > 1 ? 's' : ''}`;
+  }
+  
+  // Add children if any
+  if (children && children.length > 0) {
+    result += `\n   📋 Sub-notes (${children.length}):`;
+    children.forEach((child, index) => {
+      result += `\n      ${index + 1}. ${child.title} (ID: ${child.id})`;
+      if (child.is_done) {
+        result += ' ✅';
+      }
+    });
+  }
+  
+  return result;
+}
+
 async function processCommandWithParsed(ws, parsed, autoConfirm) {
   // console.log('DEBUG: processCommandWithParsed called with command:', parsed.cmd, 'args:', parsed.args);
   // Handle slash commands
   switch (parsed.cmd) {
-    case '/createnote':
-      const title = parsed.args.join(' ');
+    case '/createnote': {
+      const noteTitle = parsed.args.join(' ');
       
       // Check if auto-confirmation is enabled
       if (autoConfirm || StateManager.getAutoConfirm(ws)) {
         // Auto-create the note
-        const newNote = NoteManager.create(title);
+        const newNote = NoteManager.create(noteTitle);
         send(ws, { type: 'created_note', note: newNote });
-        send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}` });
+        send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
         return;
       }
       
@@ -104,50 +146,87 @@ async function processCommandWithParsed(ws, parsed, autoConfirm) {
         mode: 'pending_confirmation',
         pendingConfirmation: {
           action: 'create_note',
-          data: { title },
+          data: { title: noteTitle },
         },
       });
       sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Do you want to create a note with title '${title}'? (yes/no)` });
+      send(ws, { type: 'reply', text: `Do you want to create a note with title '${noteTitle}'? (yes/no)` });
       return;
+    }
       
-    case '/findnote':
+    case '/findnote': {
       const notes = NoteManager.findByTitle(parsed.args.join(' '));
       StateManager.setState(ws, { mode: 'find_context', findContext: { notes, selectedNote: notes.length === 1 ? notes[0] : null } });
       send(ws, { type: 'found_notes', notes });
       sendUpdatedCommands(ws);
       
       if (notes.length === 0) {
-        send(ws, { type: 'reply', text: 'No notes have been found' });
+        send(ws, { type: 'reply', text: '❌ No notes have been found' });
       } else if (notes.length === 1) {
-        send(ws, { type: 'reply', text: `Found note: ${notes[0].title}` });
+        const note = notes[0];
+        const children = NoteManager.findChildren(note.id);
+        const tree = formatNoteTree(note, children);
+        send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
       } else {
-        send(ws, { type: 'reply', text: `Found ${notes.length} notes. Please select one using /selectsubnote [id]` });
+        let noteList = `✨ Found ${notes.length} notes:\n\n`;
+        notes.forEach((note, index) => {
+          noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
+          if (note.is_done) {
+            noteList += ' ✅';
+          }
+          noteList += '\n';
+        });
+        noteList += `\n💡 Use /selectsubnote [id] to select a note`;
+        send(ws, { type: 'reply', text: noteList });
       }
       return;
+    }
       
-    case '/findbyid':
+    case '/findbyid': {
       const noteId = parsed.args[0];
       const note = NoteManager.findById(noteId)[0];
       if (note) {
-        StateManager.setState(ws, { mode: 'find_context', findContext: { notes: [note], selectedNote: note } });
-        send(ws, { type: 'found_notes', notes: [note] });
+        const children = NoteManager.findChildren(note.id);
+        const notesToShow = [note, ...children];
+        const tree = formatNoteTree(note, children);
+        StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: note } });
+        send(ws, { type: 'found_notes', notes: notesToShow });
         sendUpdatedCommands(ws);
-        send(ws, { type: 'reply', text: `Found note: ${note.title}` });
+        send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
       } else {
-        send(ws, { type: 'reply', text: 'Note not found' });
+        send(ws, { type: 'reply', text: '❌ Note not found' });
       }
       return;
+    }
       
-    case '/showparents':
+    case '/showparents': {
       const allNotes = NoteManager.getAll();
-      send(ws, { type: 'found_notes', notes: allNotes });
-      if (allNotes.length === 0) {
-        send(ws, { type: 'reply', text: 'No notes have been found' });
+      const parentNotes = allNotes.filter(note => !note.parent_id);
+      
+      // Reset to initial state since we're showing all parent notes
+      StateManager.initializeState(ws);
+      sendUpdatedCommands(ws);
+      
+      send(ws, { type: 'found_notes', notes: parentNotes });
+      if (parentNotes.length === 0) {
+        send(ws, { type: 'reply', text: '❌ No parent notes have been found' });
       } else {
-        send(ws, { type: 'reply', text: `Found ${allNotes.length} notes` });
+        let noteList = `📚 Parent notes (${parentNotes.length}):\n\n`;
+        parentNotes.forEach((note, index) => {
+          noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
+          if (note.is_done) {
+            noteList += ' ✅';
+          }
+          const childCount = NoteManager.findChildren(note.id).length;
+          if (childCount > 0) {
+            noteList += ` 📋 ${childCount}`;
+          }
+          noteList += '\n';
+        });
+        send(ws, { type: 'reply', text: noteList });
       }
       return;
+    }
       
     default:
       send(ws, { type: 'reply', text: `Unknown command: ${parsed.cmd}` });
@@ -214,15 +293,14 @@ async function handleChat(ws, o) {
   // Handle confirmation
   if (state.mode === 'pending_confirmation') {
     // Check if auto-confirmation is enabled
-    if (autoConfirm || StateManager.getAutoConfirm(ws)) {
-      // Auto-confirm the action
-      const { action, data } = state.pendingConfirmation;
-      switch (action) {
-        case 'create_note':
-          const newNote = NoteManager.create(data.title, data.description, data.parent_id);
-          send(ws, { type: 'created_note', note: newNote });
-          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}, Title: '${newNote.title}'` });
-          
+            if (autoConfirm || StateManager.getAutoConfirm(ws)) {
+              // Auto-confirm the action
+              const { action, data } = state.pendingConfirmation;
+              switch (action) {
+                case 'create_note':
+                  const newNote = NoteManager.create(data.title, data.description, data.parent_id);
+                  send(ws, { type: 'created_note', note: newNote });
+                  send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });          
           // Set the context to the newly created note
           StateManager.setState(ws, {
             mode: 'find_context',
@@ -289,7 +367,7 @@ async function handleChat(ws, o) {
               
               const updatedNote = NoteManager.findById(noteId)[0];
               send(ws, { type: 'note_updated', note: updatedNote });
-              send(ws, { type: 'reply', text: `Image added to note '${note.title}'.` });
+              send(ws, { type: 'reply', text: `Image added to note '${note.title}' (ID: ${note.id}).` });
             } else {
               send(ws, { type: 'reply', text: 'Image already exists in this note.' });
             }
@@ -311,8 +389,7 @@ async function handleChat(ws, o) {
       switch (action) {
         case 'create_note':
           const newNote = NoteManager.create(data.title, data.description, data.parent_id);
-          send(ws, { type: 'created_note', note: newNote });
-          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}, Title: '${newNote.title}'` });
+          send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
           
           // Set the context to the newly created note
           StateManager.setState(ws, {
@@ -380,7 +457,7 @@ async function handleChat(ws, o) {
               
               const updatedNote = NoteManager.findById(noteId)[0];
               send(ws, { type: 'note_updated', note: updatedNote });
-              send(ws, { type: 'reply', text: `Image added to note '${note.title}'.` });
+              send(ws, { type: 'reply', text: `Image added to note '${note.title}' (ID: ${note.id}).` });
             } else {
               send(ws, { type: 'reply', text: 'Image already exists in this note.' });
             }
@@ -443,7 +520,7 @@ async function handleChat(ws, o) {
       // Auto-create the sub-note without asking for confirmation
       const newNote = NoteManager.create(text, '', parentNote.id);
       send(ws, { type: 'created_note', note: newNote });
-      send(ws, { type: 'reply', text: `Sub-note created successfully! ID: ${newNote.id}, Title: '${text}'` });
+      send(ws, { type: 'reply', text: `Sub-note '${newNote.title}' (ID: ${newNote.id}) created under '${parentNote.title}' (ID: ${parentNote.id}).` });
       
       // Return to parent note context
       StateManager.setState(ws, {
@@ -456,7 +533,7 @@ async function handleChat(ws, o) {
       
       send(ws, { 
         type: 'reply', 
-        text: `Returned to parent note '${parentNote.title}' context. What would you like to do? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` 
+        text: `Returned to parent note '${parentNote.title}' (ID: ${parentNote.id}) context. What would you like to do? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` 
       });
       sendUpdatedCommands(ws);
       return;
@@ -471,7 +548,7 @@ async function handleChat(ws, o) {
       },
       findContext: state.findContext // Preserve the parent context
     });
-    send(ws, { type: 'reply', text: `Create sub-note '${text}' under '${parentNote.title}'? (yes/no)` });
+    send(ws, { type: 'reply', text: `Create sub-note '${text}' under '${parentNote.title}' (ID: ${parentNote.id})? (yes/no)` });
     return;
   }
 
@@ -495,6 +572,12 @@ async function handleChat(ws, o) {
     // State-dependent commands
     if (state.mode === 'find_context') {
       switch (parsed.cmd) {
+        case '/back':
+          // Reset to initial state
+          StateManager.initializeState(ws);
+          sendUpdatedCommands(ws);
+          send(ws, { type: 'reply', text: '🏠 Returned to main menu. You can now create or find notes.' });
+          return;
         case '/delete':
           const noteToDelete = state.findContext.selectedNote;
           if (noteToDelete) {
@@ -503,7 +586,7 @@ async function handleChat(ws, o) {
               // Auto-delete the note
               NoteManager.delete(noteToDelete.id);
               send(ws, { type: 'note_deleted', id: noteToDelete.id });
-              send(ws, { type: 'reply', text: `Note ${noteToDelete.id} deleted.` });
+              send(ws, { type: 'reply', text: `Note '${noteToDelete.title}' (ID: ${noteToDelete.id}) deleted.` });
               return;
             }
             
@@ -516,7 +599,7 @@ async function handleChat(ws, o) {
               },
             });
             sendUpdatedCommands(ws);
-            send(ws, { type: 'reply', text: `Are you sure you want to delete note '${noteToDelete.title}'? (yes/no)` });
+            send(ws, { type: 'reply', text: `Are you sure you want to delete note '${noteToDelete.title}' (ID: ${noteToDelete.id})? (yes/no)` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
           }
@@ -526,7 +609,7 @@ async function handleChat(ws, o) {
           if (noteToEdit) {
             StateManager.setState(ws, { mode: 'story_editing', storyEditingNoteId: noteToEdit.id, descriptionBuffer: '' });
             sendUpdatedCommands(ws);
-            send(ws, { type: 'reply', text: `Editing description for '${noteToEdit.title}'. Type your description. Say /stopediting when you are done.` });
+            send(ws, { type: 'reply', text: `Editing description for '${noteToEdit.title}' (ID: ${noteToEdit.id}). Type your description. Say /stopediting when you are done.` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
           }
@@ -538,8 +621,9 @@ async function handleChat(ws, o) {
             if (autoConfirm || StateManager.getAutoConfirm(ws)) {
               // Auto-mark the note as done
               NoteManager.update(noteToMark.id, { done: true });
-              send(ws, { type: 'note_updated', note: NoteManager.findById(noteToMark.id)[0] });
-              send(ws, { type: 'reply', text: `Note marked as done.` });
+              const updatedNote = NoteManager.findById(noteToMark.id)[0];
+              send(ws, { type: 'note_updated', note: updatedNote });
+              send(ws, { type: 'reply', text: `Note '${updatedNote.title}' (ID: ${updatedNote.id}) marked as done.` });
               return;
             }
             
@@ -552,7 +636,7 @@ async function handleChat(ws, o) {
               },
             });
             sendUpdatedCommands(ws);
-            send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToMark.title}' as done? (yes/no)` });
+            send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToMark.title}' (ID: ${noteToMark.id}) as done? (yes/no)` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
           }
@@ -562,7 +646,7 @@ async function handleChat(ws, o) {
           if (noteToTalk) {
             StateManager.setState(ws, { mode: 'ai_conversation', aiConversationNoteId: noteToTalk.id });
             sendUpdatedCommands(ws);
-            send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}'. Say /stop to end.` });
+            send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}' (ID: ${noteToTalk.id}). Say /stop to end.` });
           } else {
             send(ws, { type: 'reply', text: 'No note selected.' });
           }
@@ -574,7 +658,7 @@ async function handleChat(ws, o) {
             if (selectedNote) {
               StateManager.setState(ws, { findContext: { ...state.findContext, selectedNote } });
               sendUpdatedCommands(ws);
-              send(ws, { type: 'reply', text: `Selected note '${selectedNote.title}'.` });
+              send(ws, { type: 'reply', text: `Selected note '${selectedNote.title}' (ID: ${selectedNote.id}).` });
             } else {
               send(ws, { type: 'reply', text: 'Note not found in current context.' });
             }
@@ -624,14 +708,14 @@ async function handleChat(ws, o) {
           return;
         }
         
-        const title = parsed.args.join(' ');
+        const createNoteTitle = parsed.args.join(' ');
         
         // Check if auto-confirmation is enabled
         if (autoConfirm || StateManager.getAutoConfirm(ws)) {
           // Auto-create the note
-          const newNote = NoteManager.create(title);
+          const newNote = NoteManager.create(createNoteTitle);
           send(ws, { type: 'created_note', note: newNote });
-          send(ws, { type: 'reply', text: `Note created successfully! ID: ${newNote.id}` });
+          send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
           return;
         }
         
@@ -640,11 +724,11 @@ async function handleChat(ws, o) {
           mode: 'pending_confirmation',
           pendingConfirmation: {
             action: 'create_note',
-            data: { title },
+            data: { title: createNoteTitle },
           },
         });
         sendUpdatedCommands(ws);
-        send(ws, { type: 'reply', text: `Do you want to create a note with title '${title}'? (yes/no)` });
+        send(ws, { type: 'reply', text: `Do you want to create a note with title '${createNoteTitle}'? (yes/no)` });
         return;
       case '/findnote':
         if (!parsed.args.length) {
@@ -667,11 +751,23 @@ async function handleChat(ws, o) {
         send(ws, { type: 'found_notes', notes });
         sendUpdatedCommands(ws);
         if (notes.length === 0) {
-          send(ws, { type: 'reply', text: 'No notes have been found' });
+          send(ws, { type: 'reply', text: '❌ No notes have been found' });
         } else if (notes.length === 1) {
-          send(ws, { type: 'reply', text: `Found note '${notes[0].title}'. What would you like to do?` });
+          const note = notes[0];
+          const children = NoteManager.findChildren(note.id);
+          const tree = formatNoteTree(note, children);
+          send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
         } else {
-          send(ws, { type: 'reply', text: `Found ${notes.length} notes.` });
+          let noteList = `✨ Found ${notes.length} notes:\n\n`;
+          notes.forEach((note, index) => {
+            noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
+            if (note.is_done) {
+              noteList += ' ✅';
+            }
+            noteList += '\n';
+          });
+          noteList += `\n💡 Use /selectsubnote [id] to select a note`;
+          send(ws, { type: 'reply', text: noteList });
         }
         return;
       case '/findbyid':
@@ -696,37 +792,87 @@ async function handleChat(ws, o) {
           StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: note } });
           send(ws, { type: 'found_notes', notes: notesToShow });
           sendUpdatedCommands(ws);
-          send(ws, { type: 'reply', text: `Found note '${note.title}'. What would you like to do?` });
+          const tree = formatNoteTree(note, children);
+          send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
         } else {
-          send(ws, { type: 'reply', text: 'Note not found.' });
+          send(ws, { type: 'reply', text: '❌ Note not found.' });
         }
         return;
       case '/showparents':
-        send(ws, { type: 'found_notes', notes: NoteManager.getAll().filter(n => !n.parent_id) });
+        const parentNotes = NoteManager.getAll().filter(n => !n.parent_id);
+        send(ws, { type: 'found_notes', notes: parentNotes });
+        
+        if (parentNotes.length === 0) {
+          send(ws, { type: 'reply', text: '❌ No parent notes found.' });
+        } else {
+          let noteList = `📚 Parent notes (${parentNotes.length}):\n\n`;
+          parentNotes.forEach((note, index) => {
+            noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
+            if (note.is_done) {
+              noteList += ' ✅';
+            }
+            const childCount = NoteManager.findChildren(note.id).length;
+            if (childCount > 0) {
+              noteList += ` 📋 ${childCount}`;
+            }
+            noteList += '\n';
+          });
+          send(ws, { type: 'reply', text: noteList });
+        }
         return;
       case '/createsubnote':
-          let parentNote = null;
-          if (parsed.args.length > 0) {
+        let parentNote = null;
+        let title = '';
+
+        // Scenario 1: in find_context, e.g. /createsubnote <title>
+        if (state.mode === 'find_context') {
+            parentNote = state.findContext.selectedNote;
+            title = parsed.args.join(' ');
+        }
+        // Scenario 2: parent ID is provided, e.g. /createsubnote <id> <title>
+        else if (parsed.args.length > 0) {
             const parentNoteId = parsed.args[0];
             parentNote = NoteManager.findById(parentNoteId)[0];
             if (!parentNote) {
-              send(ws, { type: 'reply', text: 'Parent note not found.' });
-              return;
+                send(ws, { type: 'reply', text: `Parent note with ID '${parentNoteId}' not found.` });
+                return;
             }
-          } else {
-            if (state.mode === 'find_context') {
-              parentNote = state.findContext.selectedNote;
-            }
-          }
+            title = parsed.args.slice(1).join(' ');
+        }
 
-          if (parentNote) {
-            StateManager.setState(ws, { mode: 'pending_subnote_creation', findContext: { ...state.findContext, selectedNote: parentNote } });
-            sendUpdatedCommands(ws);
-            send(ws, { type: 'reply', text: 'What is the title of the sub-note?' });
-          } else {
+        if (parentNote) {
+            if (title) {
+                // Check if auto-confirmation is enabled
+                if (autoConfirm || StateManager.getAutoConfirm(ws)) {
+                    // Auto-create the sub-note
+                    const newNote = NoteManager.create(title, '', parentNote.id);
+                    send(ws, { type: 'created_note', note: newNote });
+                    send(ws, { type: 'reply', text: `Sub-note '${newNote.title}' (ID: ${newNote.id}) created under '${parentNote.title}' (ID: ${parentNote.id}).` });
+                    sendUpdatedCommands(ws);
+                    return;
+                }
+                
+                // Otherwise, ask for confirmation
+                StateManager.setState(ws, {
+                    mode: 'pending_confirmation',
+                    pendingConfirmation: {
+                        action: 'create_note',
+                        data: { title, parent_id: parentNote.id },
+                    },
+                    findContext: state.findContext
+                });
+                sendUpdatedCommands(ws);
+                send(ws, { type: 'reply', text: `Create sub-note '${title}' under '${parentNote.title}' (ID: ${parentNote.id})? (yes/no)` });
+            } else {
+                // Ask for title
+                StateManager.setState(ws, { mode: 'pending_subnote_creation', findContext: { ...state.findContext, selectedNote: parentNote } });
+                sendUpdatedCommands(ws);
+                send(ws, { type: 'reply', text: `What is the title of the sub-note for '${parentNote.title}' (ID: ${parentNote.id})?` });
+            }
+        } else {
             send(ws, { type: 'reply', text: 'No parent note selected. Use /findnote first or specify a parent note ID.' });
-          }
-          return;
+        }
+        return;
       case '/editnotedescription':
         if (parsed.args.length < 3) {
           send(ws, { type: 'reply', text: 'Usage: /editnote [id] [property] [value]' });
@@ -778,6 +924,17 @@ wss.on('connection', (ws) => {
         case 'create_note': send(ws, { type: 'created_note', note: NoteManager.create(o.title || 'Untitled', o.description || '', o.parent_id || null) }); break;
         case 'update_note': const updated = NoteManager.update(o.id, o.patch || {}); if (updated) send(ws, { type: 'note_updated', note: updated }); else send(ws, { type: 'reply', text: 'Note not found' }); break;
         case 'delete_note': if (NoteManager.delete(o.id)) send(ws, { type: 'note_deleted', id: o.id }); else send(ws, { type: 'reply', text: 'Note not found' }); break;
+        case 'restore_context':
+          const noteToRestore = NoteManager.findById(o.noteId)[0];
+          if (noteToRestore) {
+            const children = NoteManager.findChildren(noteToRestore.id);
+            const notesToShow = [noteToRestore, ...children];
+            StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: noteToRestore } });
+            send(ws, { type: 'found_notes', notes: notesToShow });
+            sendUpdatedCommands(ws);
+            send(ws, { type: 'reply', text: `Restored context to note '${noteToRestore.title}' (ID: ${noteToRestore.id}).` });
+          }
+          break;
         case 'set_auto_confirm': StateManager.setAutoConfirm(ws, o.enabled); send(ws, { type: 'auto_confirm_status', enabled: o.enabled }); break;
         case 'debug': if (o.action === 'get_notes') send(ws, { type: 'debug_notes', notes: JSON.stringify(NoteManager.getAll(), null, 2) }); if (o.action === 'clear_notes') { NoteManager.clearAll(); send(ws, { type: 'debug_cleared' }); } break;
         
@@ -828,7 +985,7 @@ wss.on('connection', (ws) => {
 
             send(ws, { 
               type: 'reply', 
-              text: `Image '${imageName}' uploaded successfully. Add it to note '${note.title}'? (yes/no)` 
+              text: `Image "${imageName}" uploaded successfully. Add it to note "${note.title}" (ID: ${note.id})? (yes/no)` 
             });
           } catch (error) {
             console.error('Error saving image:', error);
@@ -839,7 +996,7 @@ wss.on('connection', (ws) => {
         
         
         
-        default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
+default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
       }
     } catch (e) { console.error('message handling error', e); send(ws, { type: 'reply', text: 'Internal server error' }); } 
   });

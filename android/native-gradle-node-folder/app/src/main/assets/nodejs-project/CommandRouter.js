@@ -30,6 +30,7 @@ function getAvailableCommands(ws, stateManager) {
   // If in find context (note selected), return note-specific commands
   if (state.mode === 'find_context' && state.findContext && state.findContext.selectedNote) {
     return [
+      { action: 'slash_back', command: '/back', category: 'Navigation', description: 'Return to main menu', examples: ['/back'], requiresParam: false },
       { action: 'slash_edit_description', command: '/editdescription', category: 'Edit', description: 'Edit note description', examples: ['/editdescription'], requiresParam: false },
       { action: 'slash_mark_done', command: '/markdone', category: 'Edit', description: 'Mark note as done', examples: ['/markdone'], requiresParam: false },
       { action: 'slash_delete', command: '/delete', category: 'Edit', description: 'Delete the note', examples: ['/delete'], requiresParam: false },
