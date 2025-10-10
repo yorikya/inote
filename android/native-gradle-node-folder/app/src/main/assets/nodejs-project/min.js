@@ -313,7 +313,7 @@ async function handleChat(ws, o) {
           // Send follow-up message with suggested actions
           send(ws, { 
             type: 'reply', 
-            text: `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` 
+            text: `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai, /selectsubnote)` 
           });
           sendUpdatedCommands(ws);
           return; // Don't call initializeState

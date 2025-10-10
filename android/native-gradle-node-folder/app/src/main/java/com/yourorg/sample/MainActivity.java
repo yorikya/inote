@@ -26,6 +26,8 @@ import android.net.Uri;
 import android.os.Build;
 import java.net.*;
 import java.io.*;
+import java.util.*;
+import java.io.File;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -155,6 +157,10 @@ public class MainActivity extends AppCompatActivity {
                     
                     if (wasAPKUpdated()) {
                         Log.d("MainActivity", "APK was updated, copying assets...");
+
+                        // Backup user data before deleting directories
+                        String notesBackupPath = backupUserData(nodeDir);
+
                         // Recursively delete any existing nodejs-project and www folders.
                         File nodeDirReference = new File(nodeDir);
                         if (nodeDirReference.exists()) {
@@ -164,9 +170,16 @@ public class MainActivity extends AppCompatActivity {
                         if (wwwDirReference.exists()) {
                             deleteFolderRecursively(new File(wwwDir));
                         }
+
                         // Copy the node project from assets into the application's data path.
                         copyAssetFolder(getApplicationContext().getAssets(), "nodejs-project", nodeDir);
                         copyAssetFolder(getApplicationContext().getAssets(), "www", wwwDir);
+
+                        // Restore user data after copying new assets
+                        if (notesBackupPath != null) {
+                            restoreUserData(nodeDir, notesBackupPath);
+                        }
+
                         saveLastUpdateTime();
                         Log.d("MainActivity", "Assets copied successfully");
                     } else {
@@ -332,6 +345,161 @@ public class MainActivity extends AppCompatActivity {
         int read;
         while ((read = in.read(buffer)) != -1) {
             out.write(buffer, 0, read);
+        }
+    }
+
+    /**
+     * Backs up user data before updating the app
+     * @param nodeDir Path to the nodejs-project directory
+     * @return Path to the backup file, or null if backup failed
+     */
+    private String backupUserData(String nodeDir) {
+        try {
+            // Check if notes.json exists
+            File notesFile = new File(nodeDir, "notes.json");
+            if (!notesFile.exists()) {
+                Log.d("MainActivity", "No notes.json file found, nothing to backup");
+                return null;
+            }
+
+            // Create backup directory in app's external storage
+            File backupDir = new File(getApplicationContext().getExternalFilesDir(null), "backup");
+            if (!backupDir.exists()) {
+                backupDir.mkdirs();
+            }
+
+            // Create backup file with timestamp
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            File backupFile = new File(backupDir, "notes_backup_" + timestamp + ".json");
+
+            // Copy notes.json to backup location
+            copyFile(new FileInputStream(notesFile), new FileOutputStream(backupFile));
+
+            // Also backup the images directory if it exists
+            File imagesDir = new File(nodeDir, "images");
+            if (imagesDir.exists() && imagesDir.isDirectory()) {
+                File imagesBackupDir = new File(backupDir, "images_backup_" + timestamp);
+                copyFolder(imagesDir, imagesBackupDir);
+                Log.d("MainActivity", "Images directory backed up to: " + imagesBackupDir.getAbsolutePath());
+            }
+
+            Log.d("MainActivity", "Notes backed up to: " + backupFile.getAbsolutePath());
+            return backupFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error backing up user data: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Restores user data after updating the app
+     * @param nodeDir Path to the nodejs-project directory
+     * @param notesBackupPath Path to the backup file
+     */
+    private void restoreUserData(String nodeDir, String notesBackupPath) {
+        try {
+            // Restore notes.json from backup
+            File backupFile = new File(notesBackupPath);
+            if (backupFile.exists()) {
+                File notesFile = new File(nodeDir, "notes.json");
+                copyFile(new FileInputStream(backupFile), new FileOutputStream(notesFile));
+                Log.d("MainActivity", "Notes restored from backup");
+
+                // Try to restore images directory if it exists
+                String backupFileName = backupFile.getName();
+                String timestamp = backupFileName.substring(backupFileName.indexOf("_") + 1, backupFileName.lastIndexOf("."));
+                File imagesBackupDir = new File(getApplicationContext().getExternalFilesDir(null), "backup/images_backup_" + timestamp);
+                File imagesDir = new File(nodeDir, "images");
+
+                if (imagesBackupDir.exists() && imagesBackupDir.isDirectory()) {
+                    if (!imagesDir.exists()) {
+                        imagesDir.mkdirs();
+                    }
+                    copyFolder(imagesBackupDir, imagesDir);
+                    Log.d("MainActivity", "Images directory restored from backup");
+                }
+
+                // Clean up old backups (keep only the most recent 3)
+                cleanupOldBackups();
+            } else {
+                Log.e("MainActivity", "Backup file not found: " + notesBackupPath);
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error restoring user data: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Copies a folder and its contents recursively
+     */
+    private void copyFolder(File source, File destination) {
+        try {
+            if (!destination.exists()) {
+                destination.mkdirs();
+            }
+
+            File[] files = source.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    File destFile = new File(destination, file.getName());
+                    if (file.isDirectory()) {
+                        copyFolder(file, destFile);
+                    } else {
+                        copyFile(new FileInputStream(file), new FileOutputStream(destFile));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error copying folder: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Cleans up old backup files, keeping only the most recent 3
+     */
+    private void cleanupOldBackups() {
+        try {
+            File backupDir = new File(getApplicationContext().getExternalFilesDir(null), "backup");
+            if (backupDir.exists() && backupDir.isDirectory()) {
+                File[] backupFiles = backupDir.listFiles(new FilenameFilter() {
+                    @Override
+                    public boolean accept(File dir, String name) {
+                        return name.startsWith("notes_backup_") && name.endsWith(".json");
+                    }
+                });
+
+                if (backupFiles != null && backupFiles.length > 3) {
+                    // Sort by modification time (oldest first)
+                    Arrays.sort(backupFiles, new Comparator<File>() {
+                        @Override
+                        public int compare(File f1, File f2) {
+                            return Long.compare(f1.lastModified(), f2.lastModified());
+                        }
+                    });
+
+                    // Delete the oldest files, keeping only the 3 most recent
+                    for (int i = 0; i < backupFiles.length - 3; i++) {
+                        if (backupFiles[i].delete()) {
+                            Log.d("MainActivity", "Deleted old backup: " + backupFiles[i].getName());
+
+                            // Also delete the corresponding images backup if it exists
+                            String backupName = backupFiles[i].getName();
+                            String timestamp = backupName.substring(backupName.indexOf("_") + 1, backupName.lastIndexOf("."));
+                            File imagesBackupDir = new File(backupDir, "images_backup_" + timestamp);
+                            if (imagesBackupDir.exists()) {
+                                deleteFolderRecursively(imagesBackupDir);
+                                Log.d("MainActivity", "Deleted old images backup: " + imagesBackupDir.getName());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error cleaning up old backups: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
