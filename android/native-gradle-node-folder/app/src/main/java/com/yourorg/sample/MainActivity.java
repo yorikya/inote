@@ -1,3 +1,4 @@
+
 package com.yourorg.sample;
 
 import android.os.AsyncTask;
@@ -9,6 +10,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
+import android.webkit.ValueCallback;
+import android.webkit.WebResourceRequest;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -18,6 +21,9 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import java.net.*;
 import java.io.*;
 
@@ -31,6 +37,10 @@ public class MainActivity extends AppCompatActivity {
 
     //We just want one instance of node running in the background.
     public static boolean _startedNodeAlready=false;
+    
+    // File chooser support
+    private ValueCallback<Uri[]> mFilePathCallback;
+    private static final int FILE_CHOOSER_REQUEST_CODE = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,12 +81,53 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
+        // ============================================
+        // CRITICAL: Implement File Chooser for Image Upload
+        // ============================================
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
                 Log.d("WebView Console", consoleMessage.message() + " -- From line "
                         + consoleMessage.lineNumber() + " of "
                         + consoleMessage.sourceId());
+                return true;
+            }
+            
+            // For Android 5.0+ (API 21+)
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+                                            FileChooserParams fileChooserParams) {
+                Log.d("MainActivity", "onShowFileChooser called");
+                
+                // Cancel any existing file chooser
+                if (mFilePathCallback != null) {
+                    mFilePathCallback.onReceiveValue(null);
+                }
+                
+                mFilePathCallback = filePathCallback;
+                
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
+                
+                // Allow multiple file selection
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                }
+                
+                try {
+                    startActivityForResult(
+                        Intent.createChooser(intent, "Select Images"),
+                        FILE_CHOOSER_REQUEST_CODE
+                    );
+                    Log.d("MainActivity", "File chooser intent started");
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error starting file chooser: " + e.getMessage());
+                    mFilePathCallback = null;
+                    Toast.makeText(MainActivity.this, "Cannot open file chooser", Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                
                 return true;
             }
         });
@@ -128,6 +179,51 @@ public class MainActivity extends AppCompatActivity {
                     });
                 }
             }).start();
+        }
+    }
+    
+    // ============================================
+    // Handle File Chooser Result
+    // ============================================
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        Log.d("MainActivity", "onActivityResult: requestCode=" + requestCode + ", resultCode=" + resultCode);
+        
+        if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            if (mFilePathCallback == null) {
+                Log.e("MainActivity", "mFilePathCallback is null");
+                return;
+            }
+            
+            Uri[] results = null;
+            
+            if (resultCode == RESULT_OK) {
+                if (data != null) {
+                    String dataString = data.getDataString();
+                    
+                    // Handle multiple file selection
+                    if (data.getClipData() != null) {
+                        int count = data.getClipData().getItemCount();
+                        results = new Uri[count];
+                        for (int i = 0; i < count; i++) {
+                            results[i] = data.getClipData().getItemAt(i).getUri();
+                            Log.d("MainActivity", "Selected file " + i + ": " + results[i].toString());
+                        }
+                    }
+                    // Handle single file selection
+                    else if (dataString != null) {
+                        results = new Uri[]{Uri.parse(dataString)};
+                        Log.d("MainActivity", "Selected single file: " + dataString);
+                    }
+                }
+            } else {
+                Log.d("MainActivity", "File chooser cancelled");
+            }
+            
+            mFilePathCallback.onReceiveValue(results);
+            mFilePathCallback = null;
         }
     }
 
