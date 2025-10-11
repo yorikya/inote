@@ -2,7 +2,7 @@
   "name": "native-gradle-node-project",
   "version": "0.0.1",
   "description": "node part of the project",
-  "main": "main.js",
+  "main": "min.js",
   "author": "janeasystems",
   "license": "MIT",
   "dependencies": {

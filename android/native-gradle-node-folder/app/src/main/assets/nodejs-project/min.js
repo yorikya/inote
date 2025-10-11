@@ -249,9 +249,7 @@ async function handleConfirmationAction(ws, action, data, autoConfirm) {
         findContext: { selectedNote: newNote, results: [newNote] }
       });
       
-      const followUpText = autoConfirm 
-        ? `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai, /selectsubnote)`
-        : `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)`;
+      const followUpText = `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai, /selectsubnote)`;
       
       send(ws, { type: 'reply', text: followUpText });
       sendUpdatedCommands(ws);
@@ -607,6 +605,61 @@ async function handleChat(ws, o) {
   }
 }
 
+async function handleImageUpload(ws, o) {
+  const { noteId, imageData, imageName } = o;
+
+  // Validate inputs
+  if (!noteId || !imageData || !imageName) {
+    send(ws, { type: 'reply', text: 'Invalid image upload data. Missing noteId, imageData, or imageName.' });
+    return;
+  }
+
+  // Find the note
+  const notes = NoteManager.findById(noteId);
+  if (!notes || notes.length === 0) {
+    send(ws, { type: 'reply', text: `Note with ID ${noteId} not found.` });
+    return;
+  }
+
+  const note = notes[0];
+
+  // Save the image file
+  const imagesDir = path.join(__dirname, 'images');
+  if (!require('fs').existsSync(imagesDir)) {
+    require('fs').mkdirSync(imagesDir, { recursive: true });
+  }
+
+  const timestamp = Date.now();
+  const sanitizedName = imageName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const fileName = `note_${noteId}_${timestamp}_${sanitizedName}`;
+  const filePath = path.join(imagesDir, fileName);
+  const relativeFilePath = fileName;
+
+  try {
+    // Decode base64 and save
+    const buffer = Buffer.from(imageData, 'base64');
+    require('fs').writeFileSync(filePath, buffer);
+    console.log(`Image saved to: ${filePath}`);
+
+    // Store the image path in state for confirmation
+    StateManager.setState(ws, {
+      mode: 'pending_confirmation',
+      pendingConfirmation: {
+        action: 'add_image_to_note',
+        data: { noteId, imagePath: relativeFilePath, imageName }
+      }
+    });
+
+    send(ws, { 
+      type: 'reply', 
+      text: `Image "${imageName}" uploaded successfully. Add it to note "${note.title}" (ID: ${note.id})? (yes/no)` 
+    });
+  } catch (error) {
+    console.error('Error saving image:', error);
+    send(ws, { type: 'reply', text: `Failed to save image: ${error.message}` });
+  }
+}
+
 wss.on('connection', (ws) => {
   console.log('Client connected');
   StateManager.initializeState(ws);
@@ -637,66 +690,10 @@ wss.on('connection', (ws) => {
           break;
         case 'set_auto_confirm': StateManager.setAutoConfirm(ws, o.enabled); send(ws, { type: 'auto_confirm_status', enabled: o.enabled }); break;
         case 'debug': if (o.action === 'get_notes') send(ws, { type: 'debug_notes', notes: JSON.stringify(NoteManager.getAll(), null, 2) }); if (o.action === 'clear_notes') { NoteManager.clearAll(); send(ws, { type: 'debug_cleared' }); } break;
-        
-        case 'image_upload': {
-          const { noteId, imageData, imageName } = o;
-          
-          // Validate inputs
-          if (!noteId || !imageData || !imageName) {
-            send(ws, { type: 'reply', text: 'Invalid image upload data. Missing noteId, imageData, or imageName.' });
-            break;
-          }
-
-          // Find the note
-          const notes = NoteManager.findById(noteId);
-          if (!notes || notes.length === 0) {
-            send(ws, { type: 'reply', text: `Note with ID ${noteId} not found.` });
-            break;
-          }
-
-          const note = notes[0];
-
-          // Save the image file
-          const imagesDir = path.join(__dirname, 'images');
-          if (!require('fs').existsSync(imagesDir)) {
-            require('fs').mkdirSync(imagesDir, { recursive: true });
-          }
-
-          const timestamp = Date.now();
-          const sanitizedName = imageName.replace(/[^a-zA-Z0-9._-]/g, '_');
-          const fileName = `note_${noteId}_${timestamp}_${sanitizedName}`;
-          const filePath = path.join(imagesDir, fileName);
-          const relativeFilePath = fileName;
-
-          try {
-            // Decode base64 and save
-            const buffer = Buffer.from(imageData, 'base64');
-            require('fs').writeFileSync(filePath, buffer);
-            console.log(`Image saved to: ${filePath}`);
-
-            // Store the image path in state for confirmation
-            StateManager.setState(ws, {
-              mode: 'pending_confirmation',
-              pendingConfirmation: {
-                action: 'add_image_to_note',
-                data: { noteId, imagePath: relativeFilePath, imageName }
-              }
-            });
-
-            send(ws, { 
-              type: 'reply', 
-              text: `Image "${imageName}" uploaded successfully. Add it to note "${note.title}" (ID: ${note.id})? (yes/no)` 
-            });
-          } catch (error) {
-            console.error('Error saving image:', error);
-            send(ws, { type: 'reply', text: `Failed to save image: ${error.message}` });
-          }
+        case 'image_upload':
+          await handleImageUpload(ws, o);
           break;
-        }
-        
-        
-        
-default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
+        default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
       }
     } catch (e) { console.error('message handling error', e); send(ws, { type: 'reply', text: 'Internal server error' }); } 
   });

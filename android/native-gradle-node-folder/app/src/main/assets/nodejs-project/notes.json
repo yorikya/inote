@@ -52,7 +52,17 @@
       "images": [],
       "deleted": false,
       "creation_date": "2025-10-10T14:30:07.757Z"
+    },
+    {
+      "id": "6",
+      "title": "test3",
+      "description": "",
+      "parent_id": null,
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-11T13:35:39.879Z"
     }
   ],
-  "latestNoteId": 5
+  "latestNoteId": 6
 }
