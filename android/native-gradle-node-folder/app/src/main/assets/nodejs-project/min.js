@@ -671,8 +671,55 @@ wss.on('connection', (ws) => {
         case 'get_commands': send(ws, { type: 'available_commands', commands: CommandRouter.getAvailableCommands(ws, StateManager) }); break;
         case 'get_all_notes': send(ws, { type: 'all_notes', notes: NoteManager.getAll() }); break;
         case 'create_note': send(ws, { type: 'created_note', note: NoteManager.create(o.title || 'Untitled', o.description || '', o.parent_id || null) }); break;
-        case 'update_note': const updated = NoteManager.update(o.id, o.patch || {}); if (updated) send(ws, { type: 'note_updated', note: updated }); else send(ws, { type: 'reply', text: 'Note not found' }); break;
-        case 'delete_note': if (NoteManager.delete(o.id)) send(ws, { type: 'note_deleted', id: o.id }); else send(ws, { type: 'reply', text: 'Note not found' }); break;
+        case 'update_note':
+          try {
+            const { noteId, updates } = o;
+            console.log('[Backend] Updating note:', noteId, 'with:', updates);
+            
+            // Update the note
+            NoteManager.update(noteId, updates);
+            
+            // Get the updated note
+            const updatedNote = NoteManager.findById(noteId)[0];
+            
+            // Send confirmation
+            send(ws, { 
+              type: 'note_updated', 
+              note: updatedNote 
+            });
+            
+            console.log('[Backend] Note updated successfully:', updatedNote);
+          } catch (error) {
+            console.error('[Backend] Error updating note:', error);
+            send(ws, { 
+              type: 'error', 
+              message: 'Failed to update note: ' + error.message 
+            });
+          }
+          break;
+        case 'delete_note':
+          try {
+            const { noteId } = o;
+            console.log('[Backend] Deleting note:', noteId);
+            
+            // Delete the note
+            NoteManager.delete(noteId);
+            
+            // Send confirmation
+            send(ws, { 
+              type: 'note_deleted', 
+              id: noteId 
+            });
+            
+            console.log('[Backend] Note deleted successfully:', noteId);
+          } catch (error) {
+            console.error('[Backend] Error deleting note:', error);
+            send(ws, { 
+              type: 'error', 
+              message: 'Failed to delete note: ' + error.message 
+            });
+          }
+          break;
         case 'restore_context':
           const noteToRestore = NoteManager.findById(o.noteId)[0];
           if (noteToRestore) {
