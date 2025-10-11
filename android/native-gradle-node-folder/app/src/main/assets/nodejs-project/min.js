@@ -437,9 +437,17 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         send(ws, { type: 'reply', text: 'No note selected.' });
         return true;
       }
-      StateManager.setState(ws, { mode: 'story_editing', storyEditingNoteId: noteToEdit.id, descriptionBuffer: '' });
-      sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Editing description for '${noteToEdit.title}' (ID: ${noteToEdit.id}). Type your description. Say /stopediting when you are done.` });
+
+      const newDescription = parsed.args.join(' ');
+      if (newDescription) {
+        NoteManager.update(noteToEdit.id, { description: newDescription });
+        send(ws, { type: 'note_updated', note: NoteManager.findById(noteToEdit.id)[0] });
+        send(ws, { type: 'reply', text: `Note description updated.` });
+      } else {
+        StateManager.setState(ws, { mode: 'story_editing', storyEditingNoteId: noteToEdit.id, descriptionBuffer: '' });
+        sendUpdatedCommands(ws);
+        send(ws, { type: 'reply', text: `Editing description for '${noteToEdit.title}' (ID: ${noteToEdit.id}). Type your description. Say /stopediting when you are done.` });
+      }
       return true;
       
     case '/markdone':
@@ -495,6 +503,27 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       }
       return true;
       
+    case '/createsubnote':
+      const parentNote = state.findContext.selectedNote;
+      if (!parentNote) {
+        send(ws, { type: 'reply', text: 'No note selected.' });
+        return true;
+      }
+
+      const subnoteTitle = parsed.args.join(' ');
+      if (subnoteTitle) {
+        // Title is provided, create sub-note directly
+        const newNote = NoteManager.create(subnoteTitle, '', parentNote.id);
+        send(ws, { type: 'created_note', note: newNote });
+        send(ws, { type: 'reply', text: `Sub-note '${newNote.title}' (ID: ${newNote.id}) created under '${parentNote.title}' (ID: ${parentNote.id}).` });
+      } else {
+        // No title, ask for it
+        StateManager.setState(ws, { mode: 'pending_subnote_creation', findContext: state.findContext });
+        sendUpdatedCommands(ws);
+        send(ws, { type: 'reply', text: `What is the title of the sub-note for '${parentNote.title}'?` });
+      }
+      return true;
+
     case '/uploadimage':
       const noteToUpload = state.findContext.selectedNote;
       if (!noteToUpload) {

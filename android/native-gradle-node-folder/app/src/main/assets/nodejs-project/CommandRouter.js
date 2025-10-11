@@ -31,10 +31,10 @@ function getAvailableCommands(ws, stateManager) {
   if (state.mode === 'find_context' && state.findContext && state.findContext.selectedNote) {
     return [
       { action: 'slash_back', command: '/back', category: 'Navigation', description: 'Return to main menu', examples: ['/back'], requiresParam: false },
-      { action: 'slash_edit_description', command: '/editdescription', category: 'Edit', description: 'Edit note description', examples: ['/editdescription'], requiresParam: false },
+      { action: 'slash_edit_description', command: '/editdescription', category: 'Edit', description: 'Edit note description', examples: ['/editdescription'], requiresParam: true },
       { action: 'slash_mark_done', command: '/markdone', category: 'Edit', description: 'Mark note as done', examples: ['/markdone'], requiresParam: false },
       { action: 'slash_delete', command: '/delete', category: 'Edit', description: 'Delete the note', examples: ['/delete'], requiresParam: false },
-      { action: 'slash_create_subnote', command: '/createsubnote', category: 'Create', description: 'Create a sub-note', examples: ['/createsubnote'], requiresParam: false },
+      { action: 'slash_create_subnote', command: '/createsubnote', category: 'Create', description: 'Create a sub-note', examples: ['/createsubnote'], requiresParam: true },
       { action: 'slash_talk_ai', command: '/talkai', category: 'AI', description: 'Talk to AI about this note', examples: ['/talkai'], requiresParam: false },
       { action: 'slash_select_subnote', command: '/selectsubnote', category: 'Navigation', description: 'Select a sub-note', examples: ['/selectsubnote 1'], requiresParam: true },
       { action: 'slash_upload_image', command: '/uploadimage', category: 'Edit', description: 'Upload an image to the note', examples: ['/uploadimage'], requiresParam: false }
