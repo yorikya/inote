@@ -43,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     // File chooser support
     private ValueCallback<Uri[]> mFilePathCallback;
     private static final int FILE_CHOOSER_REQUEST_CODE = 1;
+    private android.webkit.PermissionRequest mPermissionRequest;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,43 +95,49 @@ public class MainActivity extends AppCompatActivity {
                         + consoleMessage.sourceId());
                 return true;
             }
-            
+
             // For Android 5.0+ (API 21+)
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
                                             FileChooserParams fileChooserParams) {
-                Log.d("MainActivity", "onShowFileChooser called");
-                
-                // Cancel any existing file chooser
                 if (mFilePathCallback != null) {
                     mFilePathCallback.onReceiveValue(null);
                 }
-                
                 mFilePathCallback = filePathCallback;
-                
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("image/*");
-                
-                // Allow multiple file selection
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
                     intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 }
-                
                 try {
-                    startActivityForResult(
-                        Intent.createChooser(intent, "Select Images"),
-                        FILE_CHOOSER_REQUEST_CODE
-                    );
-                    Log.d("MainActivity", "File chooser intent started");
+                    startActivityForResult(Intent.createChooser(intent, "Select Images"), FILE_CHOOSER_REQUEST_CODE);
                 } catch (Exception e) {
-                    Log.e("MainActivity", "Error starting file chooser: " + e.getMessage());
                     mFilePathCallback = null;
                     Toast.makeText(MainActivity.this, "Cannot open file chooser", Toast.LENGTH_SHORT).show();
                     return false;
                 }
-                
                 return true;
+            }
+
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                MainActivity.this.mPermissionRequest = request;
+                final String[] requestedResources = request.getResources();
+                for (String r : requestedResources) {
+                    if (r.equals(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 200);
+                            } else {
+                                request.grant(request.getResources());
+                            }
+                        } else {
+                            request.grant(request.getResources());
+                        }
+                        break;
+                    }
+                }
             }
         });
 
@@ -237,6 +244,21 @@ public class MainActivity extends AppCompatActivity {
             
             mFilePathCallback.onReceiveValue(results);
             mFilePathCallback = null;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 200) {
+            if (mPermissionRequest != null) {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    mPermissionRequest.grant(mPermissionRequest.getResources());
+                } else {
+                    mPermissionRequest.deny();
+                }
+                mPermissionRequest = null;
+            }
         }
     }
 
