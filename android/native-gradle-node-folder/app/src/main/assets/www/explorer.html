@@ -4,300 +4,116 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Note Explorer – Note Secretary</title>
+<link rel="stylesheet" href="explorer.css">
 <style>
-  body { margin:0; font-family: system-ui, Arial, sans-serif; background:#0b0d10; color:#e6e6e6; }
-  .app { display:flex; flex-direction:column; height:100dvh; max-width:1200px; margin:0 auto; }
-  
-  /* Header Styles */
-  header { padding:12px 16px; border-bottom:1px solid #222; display:flex; gap:8px; align-items:center; background:#1a1d21; }
-  header h1 { font-size:18px; margin:0; font-weight:600; }
-  header .spacer { flex:1; }
-  button { background:#1f6feb; color:white; border:none; border-radius:8px; padding:8px 16px; cursor:pointer; }
-  button.secondary { background:#444; }
-  button:hover { opacity:0.9; }
-  
-  /* Search Bar */
-  .search-container { padding:16px; background:#1a1d21; border-bottom:1px solid #222; }
-  .search-bar { width:100%; max-width:400px; padding:10px 16px; background:#2a2f36; color:#e6e6e6; border:1px solid #444; border-radius:24px; font-size:16px; }
-  .search-bar:focus { outline:none; border-color:#1f6feb; }
-  
-  /* Notes Grid */
-  .notes-container { flex:1; padding:16px; overflow-y:auto; }
-  .notes-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
-  
-  /* Note Card Styles */
-  .note-card { background:#1a1d21; border:1px solid #2a2f36; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease; position:relative; }
-  .note-card:hover { border-color:#1f6feb; transform:translateY(-2px); box-shadow:0 4px 12px rgba(31, 111, 235, 0.1); }
-  .note-card.completed { opacity:0.8; }
-  
-  .note-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
-  .note-title { font-size:16px; font-weight:600; color:#e6e6e6; line-height:1.3; flex:1; margin-right:8px; }
-  .note-actions { display:flex; align-items:center; gap:8px; }
-  .parent-indicator { background:#1f6feb; color:white; font-size:12px; font-weight:bold; padding:2px 6px; border-radius:4px; }
-  .note-menu-btn { background:none; border:none; color:#a0a0a0; font-size:18px; cursor:pointer; padding:4px; border-radius:4px; transition:all 0.2s ease; }
-  .note-menu-btn:hover { background:#2a2f36; color:#e6e6e6; }
-  .note-description { font-size:14px; color:#a0a0a0; line-height:1.4; margin:0 0 12px 0; max-height:60px; overflow:hidden; }
-  .note-meta { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#666; }
-  .note-id { background:#2a2f36; padding:2px 6px; border-radius:4px; }
-  .note-date { font-size:12px; }
-  .note-status { font-weight:600; }
-  .note-status.completed { color:#4ade80; }
-  .note-status.pending { color:#fbbf24; }
-  
-  /* Sub-notes indicator */
-  .sub-notes { margin-top:8px; padding:8px; background:#2a2f36; border-radius:6px; font-size:12px; color:#a0a0a0; }
-  .sub-notes-count { color:#1f6feb; font-weight:600; }
-  
-  /* Image preview styles */
-  .note-images { 
-    margin: 8px 0; 
-    position: relative; 
-    cursor: pointer;
-  }
-  
-  .image-preview-container .nav-btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0,0,0,0.5);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    font-size: 20px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .image-preview-container .nav-btn:hover {
-    background: rgba(0,0,0,0.8);
-  }
-  .image-preview-container .prev-btn {
-    left: 5px;
-  }
-  .image-preview-container .next-btn {
-    right: 5px;
-  }
-  
-  .image-preview-container {
-    position: relative;
-    width: 100%;
-    height: 120px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #2a2f36;
-  }
-  
-  .image-preview-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: transform 0.2s ease;
-  }
-  
-  .image-preview-img:hover {
-    transform: scale(1.02);
-  }
-  
-  .image-counter {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 500;
-  }
-  
-  .image-placeholder {
-    width: 100%;
-    height: 120px;
-    border-radius: 6px;
-    background: #2a2f36;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #a0a0a0;
-    font-size: 14px;
-    text-align: center;
-    border: 2px dashed #444;
-    box-sizing: border-box;
-    flex-direction: column;
-    padding: 10px;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-  
-  .image-placeholder:hover {
-    background: #333640;
-  }
-  
-  .image-error {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #a0a0a0;
-    font-size: 14px;
-    text-align: center;
-    flex-direction: column;
-    background: #2a2f36;
-    border: 2px dashed #666;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  
-  /* Image rotation styles removed - using static display */
-  
-  .no-images { 
-    text-align: center; 
-    color: #666; 
-    font-size: 12px; 
-    padding: 20px; 
-  }
-  
-  /* Edit menu styles */
-  .edit-menu { position:absolute; top:40px; right:8px; background:#1a1d21; border:1px solid #333; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:1000; min-width:200px; }
-  .edit-menu-item { padding:12px 16px; border-bottom:1px solid #333; cursor:pointer; color:#e6e6e6; font-size:14px; }
-  .edit-menu-item:hover { background:#2a2f36; }
-  .edit-menu-item:last-child { border-bottom:none; }
-  .edit-menu-item.danger { color:#ff6b6b; }
-  
-  /* Image management modal */
-  .image-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; display:none; }
-  .image-modal.show { display:flex; align-items:center; justify-content:center; }
-  .image-modal-content { background:#1a1d21; border-radius:12px; padding:20px; max-width:90%; max-height:90%; overflow-y:auto; }
-  .image-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
-  .image-modal-title { font-size:18px; font-weight:600; color:#e6e6e6; }
-  .image-modal-close { background:none; border:none; color:#a0a0a0; font-size:24px; cursor:pointer; }
-  .image-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:16px; }
-  .image-item { position:relative; }
-  .image-item img { width:100%; height:120px; object-fit:cover; border-radius:8px; }
-  .image-item-actions { position:absolute; top:8px; right:8px; display:flex; gap:4px; }
-  .image-delete-btn { background:rgba(255,107,107,0.9); color:white; border:none; border-radius:4px; padding:4px 8px; font-size:12px; cursor:pointer; }
-  .image-delete-btn:hover { background:rgba(255,107,107,1); }
-  
-  /* Empty State */
-  .empty-state { text-align:center; padding:60px 20px; color:#666; }
-  .empty-state h3 { font-size:18px; margin:0 0 8px 0; }
-  .empty-state p { font-size:14px; margin:0; }
-  
-  /* Side Menu Styles (reused from index.html) */
-  .side-menu { position:fixed; top:0; left:-300px; width:300px; height:100vh; background:#1a1d21; border-right:1px solid #333; z-index:1000; transition:left 0.3s ease; }
-  .side-menu.open { left:0; }
-  .side-menu-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
-  .side-menu-content { padding:16px; }
-  .side-menu h2 { margin:0 0 16px 0; font-size:18px; color:#e6e6e6; }
-  .side-menu button { background:#1f6feb; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; margin-right:8px; }
-  .side-menu button.secondary { background:#444; }
-  .side-menu button.nav-button { width:100%; margin:0 0 8px 0; font-size:16px; padding:12px 16px; }
-  .side-menu button.nav-button:disabled { opacity:0.5; cursor:not-allowed; }
-  .side-menu button.nav-button.active { background:#2d5a87; border:2px solid #1f6feb; }
-  .overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; }
-  .overlay.show { display:block; }
-  
-  /* Loading State */
-  .loading { text-align:center; padding:40px; color:#666; }
-  .loading::after { content:''; display:inline-block; width:20px; height:20px; border:2px solid #333; border-top:2px solid #1f6feb; border-radius:50%; animation:spin 1s linear infinite; margin-left:10px; }
-  @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
-  
-  /* Edit Modal Styles */
-  .modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 2000;
-    display: none;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .modal.show {
-    display: flex;
-  }
-  
-  .modal-content {
-    background: #1a1d21;
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-  
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #333;
-  }
-  
-  .modal-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #e6e6e6;
+  /* Override any conflicting styles and ensure side menu works properly */
+  body {
     margin: 0;
-  }
-  
-  .modal-close {
-    background: none;
-    border: none;
-    color: #a0a0a0;
-    font-size: 28px;
-    cursor: pointer;
-    padding: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-  }
-  
-  .modal-close:hover {
-    background: #2a2f36;
+    font-family: system-ui, Arial, sans-serif;
+    background: #0b0d10;
     color: #e6e6e6;
+    overflow-x: hidden;
   }
-  
-  .modal-body {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+
+  /* Side Menu - Fixed positioning on LEFT side */
+  .side-menu {
+    position: fixed !important;
+    top: 0 !important;
+    left: -300px !important;  /* Changed from right to left */
+    width: 300px !important;
+    height: 100vh !important;
+    background: #1e1e1e !important;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5) !important;  /* Changed shadow direction */
+    transition: left 0.3s ease !important;  /* Changed from right to left */
+    z-index: 1001 !important;
+    overflow-y: auto !important;
   }
-  
-  /* Toast Notification */
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1a1d21;
-    color: #e6e6e6;
-    padding: 12px 24px;
-    border-radius: 8px;
-    border: 1px solid #333;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    z-index: 3000;
-    font-size: 14px;
+
+  .side-menu.open {
+    left: 0 !important;  /* Changed from right to left */
   }
-  
-  /* Responsive */
-  @media (max-width: 768px) {
-    .notes-grid { grid-template-columns:1fr; }
-    .search-bar { max-width:100%; }
+
+  .side-menu-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 20px !important;
+    border-bottom: 1px solid #333 !important;
+  }
+
+  .side-menu-header h2 {
+    margin: 0 !important;
+    font-size: 20px !important;
+    color: #fff !important;
+  }
+
+  .side-menu-header button {
+    background: none !important;
+    border: none !important;
+    color: #fff !important;
+    font-size: 24px !important;
+    cursor: pointer !important;
+    padding: 0 !important;
+    width: 30px !important;
+    height: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .side-menu-content {
+    padding: 20px !important;
+  }
+
+  .side-menu-content h3 {
+    margin: 0 0 10px 0 !important;
+    font-size: 16px !important;
+    color: #fff !important;
+  }
+
+  /* Overlay */
+  .overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 1000 !important;
+    display: none !important;
+  }
+
+  .overlay.show {
+    display: block !important;
+  }
+
+  /* Navigation buttons */
+  .nav-button {
+    width: 100% !important;
+    padding: 12px 16px !important;
+    margin-bottom: 8px !important;
+    background: #2a2f36 !important;
+    color: #e6e6e6 !important;
+    border: 1px solid #444 !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-size: 16px !important;
+    text-align: left !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .nav-button:hover {
+    background: #1f6feb !important;
+    border-color: #1f6feb !important;
+  }
+
+  .nav-button.active {
+    background: #1f6feb !important;
+    border-color: #1f6feb !important;
+  }
+
+  .nav-button.secondary {
+    background: #2a2f36 !important;
   }
 </style>
 </head>
@@ -346,45 +162,35 @@
       </div>
       <div class="modal-body">
         <!-- Note ID (read-only) -->
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; color: #a0a0a0; font-size: 13px;">Note ID</label>
-          <input type="text" id="editNoteId" readonly disabled 
-                 style="width: 100%; padding: 10px; background: #1a1d21; border: 1px solid #333; border-radius: 6px; color: #666; font-size: 14px;">
+        <div>
+          <label>Note ID</label>
+          <input type="text" id="editNoteId" readonly disabled>
         </div>
         
         <!-- Title -->
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; color: #e6e6e6; font-size: 13px;">Title *</label>
-          <input type="text" id="editNoteTitle" placeholder="Enter note title" required
-                 style="width: 100%; padding: 10px; background: #1a1d21; border: 1px solid #333; border-radius: 6px; color: #e6e6e6; font-size: 14px;">
+        <div>
+          <label>Title *</label>
+          <input type="text" id="editNoteTitle" placeholder="Enter note title" required>
         </div>
         
         <!-- Description -->
-        <div style="margin-bottom: 16px;">
-          <label style="display: block; margin-bottom: 6px; color: #e6e6e6; font-size: 13px;">Description</label>
-          <textarea id="editNoteDescription" rows="6" placeholder="Enter note description"
-                    style="width: 100%; padding: 10px; background: #1a1d21; border: 1px solid #333; border-radius: 6px; color: #e6e6e6; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
+        <div>
+          <label>Description</label>
+          <textarea id="editNoteDescription" rows="6" placeholder="Enter note description"></textarea>
         </div>
         
         <!-- Status -->
-        <div style="margin-bottom: 20px;">
+        <div>
           <label style="display: flex; align-items: center; cursor: pointer; user-select: none;">
-            <input type="checkbox" id="editNoteDone" 
-                   style="width: 18px; height: 18px; margin-right: 8px; cursor: pointer;">
-            <span style="color: #e6e6e6; font-size: 14px;">Mark as completed</span>
+            <input type="checkbox" id="editNoteDone">
+            <span>Mark as completed</span>
           </label>
         </div>
         
         <!-- Action Buttons -->
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button onclick="closeEditModal()" 
-                  style="padding: 10px 20px; background: #2a2f36; color: #e6e6e6; border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 14px;">
-            ❌ Cancel
-          </button>
-          <button onclick="saveNoteChanges()" 
-                  style="padding: 10px 20px; background: #0066cc; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
-            💾 Save Changes
-          </button>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <button onclick="closeEditModal()">❌ Cancel</button>
+          <button onclick="saveNoteChanges()">💾 Save Changes</button>
         </div>
       </div>
     </div>
@@ -395,7 +201,7 @@
 <div class="overlay" id="overlay"></div>
 <div class="side-menu" id="sideMenu">
   <div class="side-menu-header">
-    <h2>Navigation</h2>
+    <h2>Menu</h2>
     <button id="closeMenu">✕</button>
   </div>
   <div class="side-menu-content">
@@ -875,28 +681,36 @@ function handleWebSocketMessage(data) {
 
 // Setup event listeners
 function setupEventListeners() {
+  console.log('[Setup] Setting up event listeners');
+  
   // Side menu
   menuBtn.onclick = () => {
+    console.log('[Menu] Menu button clicked');
     sideMenu.classList.add("open");
     overlay.classList.add("show");
+    console.log('[Menu] Side menu should be open now');
   };
   
   closeMenu.onclick = () => {
+    console.log('[Menu] Close button clicked');
     sideMenu.classList.remove("open");
     overlay.classList.remove("show");
   };
   
   overlay.onclick = () => {
+    console.log('[Menu] Overlay clicked');
     sideMenu.classList.remove("open");
     overlay.classList.remove("show");
   };
   
   // Navigation
   chatButton.onclick = () => {
+    console.log('[Nav] Chat button clicked');
     window.location.href = 'index.html';
   };
   
   explorerButton.onclick = () => {
+    console.log('[Nav] Explorer button clicked');
     // Already on explorer page
     sideMenu.classList.remove("open");
     overlay.classList.remove("show");
@@ -1317,30 +1131,10 @@ function handleImageUrlReceived(data) {
           }, 3000);
         }
 
-// Handle note card clicks
-document.addEventListener('click', function(e) {
-  // Check if it's a menu button click
-  if (e.target.classList.contains('note-menu-btn')) {
-    e.stopPropagation(); // Prevent card click
-    const noteId = e.target.getAttribute('data-note-id');
-    showEditMenu(noteId, e);
-    return;
-  }
-  
-  // Check if it's a note card click (but not on menu button)
-  const noteCard = e.target.closest('.note-card');
-  if (noteCard && !e.target.closest('.note-actions')) {
-    const noteId = noteCard.getAttribute('data-note-id');
-    if (noteId) {
-      // Navigate to chat and automatically execute /findbyid command
-      window.location.href = `index.html?findbyid=${noteId}`;
-    }
-  }
-});
-
 // Show edit menu for a note
 function showEditMenu(noteId, event) {
   event.stopPropagation();
+  event.preventDefault();
   console.log('[EditMenu] Showing menu for note:', noteId);
   
   // Close any existing menus
@@ -1356,81 +1150,67 @@ function showEditMenu(noteId, event) {
   const menu = document.createElement('div');
   menu.className = 'edit-menu';
   menu.innerHTML = `
-    <div class="edit-menu-item" onclick="openEditModal(${noteId})">✏️ Edit Note</div>
-    <div class="edit-menu-item" onclick="openImageModal(${noteId})">🖼️ Manage Images</div>
-    <div class="edit-menu-item" onclick="toggleNoteDone(${noteId})">${note.done ? '⏳ Mark Pending' : '✅ Mark Done'}</div>
-    <div class="edit-menu-item danger" onclick="deleteNote(${noteId})">🗑️ Delete Note</div>
+    <div class="edit-menu-item" onclick="event.stopPropagation(); openEditModal(${noteId})">✏️ Edit Note</div>
+    <div class="edit-menu-item" onclick="event.stopPropagation(); openImageModal(${noteId})">🖼️ Manage Images</div>
+    <div class="edit-menu-item" onclick="event.stopPropagation(); toggleNoteDone(${noteId})">${note.done ? '⏳ Mark Pending' : '✅ Mark Done'}</div>
+    <div class="edit-menu-item danger" onclick="event.stopPropagation(); deleteNote(${noteId})">🗑️ Delete Note</div>
   `;
   
-  // Position menu
+  // Position menu near the button
   const button = event.target;
   const rect = button.getBoundingClientRect();
-  menu.style.left = rect.left + 'px';
-  menu.style.top = (rect.bottom + window.scrollY) + 'px';
+  
+  // Position to the left of the button to avoid going off-screen
+  menu.style.position = 'fixed';
+  menu.style.right = (window.innerWidth - rect.right) + 'px';
+  menu.style.top = (rect.bottom + 5) + 'px';
+  menu.style.zIndex = '1000';
   
   document.body.appendChild(menu);
   
+  console.log('[EditMenu] Menu created and positioned');
+  
   // Close menu when clicking outside
   setTimeout(() => {
-    document.addEventListener('click', function closeMenu(e) {
-      if (!menu.contains(e.target) && e.target !== button) {
+    const closeMenuHandler = function(e) {
+      if (!menu.contains(e.target) && !button.contains(e.target)) {
+        console.log('[EditMenu] Closing menu');
         menu.remove();
-        document.removeEventListener('click', closeMenu);
+        document.removeEventListener('click', closeMenuHandler);
       }
-    });
+    };
+    document.addEventListener('click', closeMenuHandler);
   }, 100);
 }
 
-// Open note in chat
-function openInChat(noteId) {
-  window.location.href = `index.html?findbyid=${noteId}`;
-}
-
-// Show image management modal
-function showImageManagement(noteId) {
-  const note = allNotes.find(n => n.id === noteId);
-  if (!note) return;
-  
-  const modal = document.getElementById('imageModal');
-  const imageGrid = document.getElementById('imageGrid');
-  
-  if (note.images && note.images.length > 0) {
-    imageGrid.innerHTML = note.images.map((imagePath, index) => `
-      <div class="image-item">
-        <div class="image-placeholder" style="width: 100%; height: 120px; background: #2a2f36; border: 2px dashed #444; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #a0a0a0; text-align: center; border-radius: 6px;">
-          <div style="font-size: 24px; margin-bottom: 8px;">📷</div>
-          <div style="font-size: 12px; word-break: break-all; padding: 0 8px;">${imagePath}</div>
-        </div>
-        <div class="image-item-actions">
-          <button class="image-delete-btn" onclick="deleteImage('${noteId}', '${imagePath}')">Delete</button>
-        </div>
-      </div>
-    `).join('');
-  } else {
-    imageGrid.innerHTML = '<div class="no-images">No images in this note</div>';
+// Handle note card clicks - UPDATED to prevent menu button from triggering card click
+document.addEventListener('click', function(e) {
+  // Check if it's a menu button click
+  if (e.target.classList.contains('note-menu-btn')) {
+    console.log('[Click] Menu button clicked');
+    e.stopPropagation();
+    e.preventDefault();
+    const noteId = parseInt(e.target.getAttribute('data-note-id'));
+    showEditMenu(noteId, e);
+    return;
   }
   
-  modal.classList.add('show');
-}
-
-// Close image modal
-function closeImageModal() {
-  const modal = document.getElementById('imageModal');
-  modal.classList.remove('show');
-}
-
-// Delete image
-function deleteImage(noteId, imagePath) {
-  if (confirm('Are you sure you want to delete this image?')) {
-    // This would need to be implemented with WebSocket communication
-    alert('Delete image functionality needs to be implemented');
+  // Check if clicking inside edit menu
+  if (e.target.closest('.edit-menu')) {
+    console.log('[Click] Edit menu item clicked');
+    return;
   }
-}
-
-// Handle window resize
-window.addEventListener('resize', function() {
-  // Re-render notes to adjust grid layout
-  renderNotes();
+  
+  // Check if it's a note card click (but not on menu button or actions)
+  const noteCard = e.target.closest('.note-card');
+  if (noteCard && !e.target.closest('.note-actions') && !e.target.closest('.edit-menu')) {
+    const noteId = noteCard.getAttribute('data-note-id');
+    if (noteId) {
+      console.log('[Click] Note card clicked, navigating to chat');
+      // Navigate to chat and automatically execute /findbyid command
+      window.location.href = `index.html?findbyid=${noteId}`;
+    }
+  }
 });
 </script>
 </body>
