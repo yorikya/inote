@@ -125,112 +125,108 @@ function formatNoteTree(note, children) {
   return result;
 }
 
+function handleCreateNoteCommand(ws, parsed, autoConfirm) {
+  const noteTitle = parsed.args.join(' ');
+  if (autoConfirm || StateManager.getAutoConfirm(ws)) {
+    const newNote = NoteManager.create(noteTitle);
+    send(ws, { type: 'created_note', note: newNote });
+    send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
+  } else {
+    StateManager.setState(ws, {
+      mode: 'pending_confirmation',
+      pendingConfirmation: { action: 'create_note', data: { title: noteTitle } },
+    });
+    sendUpdatedCommands(ws);
+    send(ws, { type: 'reply', text: `Do you want to create a note with title '${noteTitle}'? (yes/no)` });
+  }
+}
+
+function handleFindNoteCommand(ws, parsed) {
+  const notes = NoteManager.findByTitle(parsed.args.join(' '));
+  StateManager.setState(ws, { mode: 'find_context', findContext: { notes, selectedNote: notes.length === 1 ? notes[0] : null } });
+  send(ws, { type: 'found_notes', notes });
+  sendUpdatedCommands(ws);
+
+  if (notes.length === 0) {
+    send(ws, { type: 'reply', text: '❌ No notes have been found' });
+  } else if (notes.length === 1) {
+    const note = notes[0];
+    const children = NoteManager.findChildren(note.id);
+    const tree = formatNoteTree(note, children);
+    send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
+  } else {
+    let noteList = `✨ Found ${notes.length} notes:\n\n`;
+    notes.forEach((note, index) => {
+      noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
+      if (note.is_done) {
+        noteList += ' ✅';
+      }
+      noteList += '\n';
+    });
+    noteList += `\n💡 Use /selectsubnote [id] to select a note`;
+    send(ws, { type: 'reply', text: noteList });
+  }
+}
+
+function handleFindByIdCommand(ws, parsed) {
+  const noteId = parsed.args[0];
+  const note = NoteManager.findById(noteId)[0];
+  if (note) {
+    const children = NoteManager.findChildren(note.id);
+    const notesToShow = [note, ...children];
+    const tree = formatNoteTree(note, children);
+    StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: note } });
+    send(ws, { type: 'found_notes', notes: notesToShow });
+    sendUpdatedCommands(ws);
+    send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
+  } else {
+    send(ws, { type: 'reply', text: '❌ Note not found' });
+  }
+}
+
+function handleShowParentsCommand(ws) {
+  const allNotes = NoteManager.getAll();
+  const parentNotes = allNotes.filter(note => !note.parent_id);
+  StateManager.initializeState(ws);
+  sendUpdatedCommands(ws);
+  send(ws, { type: 'found_notes', notes: parentNotes });
+
+  if (parentNotes.length === 0) {
+    send(ws, { type: 'reply', text: '❌ No parent notes have been found' });
+  } else {
+    let noteList = `📚 Parent notes (${parentNotes.length}):\n\n`;
+    parentNotes.forEach((note, index) => {
+      noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
+      if (note.is_done) {
+        noteList += ' ✅';
+      }
+      const childCount = NoteManager.findChildren(note.id).length;
+      if (childCount > 0) {
+        noteList += ` 📋 ${childCount}`;
+      }
+      noteList += '\n';
+    });
+    send(ws, { type: 'reply', text: noteList });
+  }
+}
+
 async function processCommandWithParsed(ws, parsed, autoConfirm) {
-  // console.log('DEBUG: processCommandWithParsed called with command:', parsed.cmd, 'args:', parsed.args);
-  // Handle slash commands
   switch (parsed.cmd) {
-    case '/createnote': {
-      const noteTitle = parsed.args.join(' ');
-      
-      // Check if auto-confirmation is enabled
-      if (autoConfirm || StateManager.getAutoConfirm(ws)) {
-        // Auto-create the note
-        const newNote = NoteManager.create(noteTitle);
-        send(ws, { type: 'created_note', note: newNote });
-        send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
-        return;
-      }
-      
-      // Otherwise, ask for confirmation
-      StateManager.setState(ws, {
-        mode: 'pending_confirmation',
-        pendingConfirmation: {
-          action: 'create_note',
-          data: { title: noteTitle },
-        },
-      });
-      sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Do you want to create a note with title '${noteTitle}'? (yes/no)` });
-      return;
-    }
-      
-    case '/findnote': {
-      const notes = NoteManager.findByTitle(parsed.args.join(' '));
-      StateManager.setState(ws, { mode: 'find_context', findContext: { notes, selectedNote: notes.length === 1 ? notes[0] : null } });
-      send(ws, { type: 'found_notes', notes });
-      sendUpdatedCommands(ws);
-      
-      if (notes.length === 0) {
-        send(ws, { type: 'reply', text: '❌ No notes have been found' });
-      } else if (notes.length === 1) {
-        const note = notes[0];
-        const children = NoteManager.findChildren(note.id);
-        const tree = formatNoteTree(note, children);
-        send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
-      } else {
-        let noteList = `✨ Found ${notes.length} notes:\n\n`;
-        notes.forEach((note, index) => {
-          noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
-          if (note.is_done) {
-            noteList += ' ✅';
-          }
-          noteList += '\n';
-        });
-        noteList += `\n💡 Use /selectsubnote [id] to select a note`;
-        send(ws, { type: 'reply', text: noteList });
-      }
-      return;
-    }
-      
-    case '/findbyid': {
-      const noteId = parsed.args[0];
-      const note = NoteManager.findById(noteId)[0];
-      if (note) {
-        const children = NoteManager.findChildren(note.id);
-        const notesToShow = [note, ...children];
-        const tree = formatNoteTree(note, children);
-        StateManager.setState(ws, { mode: 'find_context', findContext: { notes: notesToShow, selectedNote: note } });
-        send(ws, { type: 'found_notes', notes: notesToShow });
-        sendUpdatedCommands(ws);
-        send(ws, { type: 'reply', text: `✨ Found note:\n\n${tree}` });
-      } else {
-        send(ws, { type: 'reply', text: '❌ Note not found' });
-      }
-      return;
-    }
-      
-    case '/showparents': {
-      const allNotes = NoteManager.getAll();
-      const parentNotes = allNotes.filter(note => !note.parent_id);
-      
-      // Reset to initial state since we're showing all parent notes
-      StateManager.initializeState(ws);
-      sendUpdatedCommands(ws);
-      
-      send(ws, { type: 'found_notes', notes: parentNotes });
-      if (parentNotes.length === 0) {
-        send(ws, { type: 'reply', text: '❌ No parent notes have been found' });
-      } else {
-        let noteList = `📚 Parent notes (${parentNotes.length}):\n\n`;
-        parentNotes.forEach((note, index) => {
-          noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
-          if (note.is_done) {
-            noteList += ' ✅';
-          }
-          const childCount = NoteManager.findChildren(note.id).length;
-          if (childCount > 0) {
-            noteList += ` 📋 ${childCount}`;
-          }
-          noteList += '\n';
-        });
-        send(ws, { type: 'reply', text: noteList });
-      }
-      return;
-    }
-      
+    case '/createnote':
+      handleCreateNoteCommand(ws, parsed, autoConfirm);
+      break;
+    case '/findnote':
+      handleFindNoteCommand(ws, parsed);
+      break;
+    case '/findbyid':
+      handleFindByIdCommand(ws, parsed);
+      break;
+    case '/showparents':
+      handleShowParentsCommand(ws);
+      break;
     default:
       send(ws, { type: 'reply', text: `Unknown command: ${parsed.cmd}` });
-      return;
+      break;
   }
 }
 
