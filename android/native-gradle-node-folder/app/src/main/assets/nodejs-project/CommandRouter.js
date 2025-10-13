@@ -16,7 +16,8 @@ function getAvailableCommands(ws, stateManager) {
       { action: 'slash_create_note', command: '/createnote', category: 'Create', description: 'Create a note', examples: ['/createnote groceries'], requiresParam: true },
       { action: 'slash_find_note', command: '/findnote', category: 'Find', description: 'Find notes by title', examples: ['/findnote groceries'], requiresParam: true },
       { action: 'slash_find_by_id', command: '/findbyid', category: 'Find', description: 'Find note by id', examples: ['/findbyid 1'], requiresParam: true },
-      { action: 'slash_show_parents', command: '/showparents', category: 'Show', description: 'Show parent notes', examples: ['/showparents'], requiresParam: false }
+      { action: 'slash_show_parents', command: '/showparents', category: 'Show', description: 'Show parent notes', examples: ['/showparents'], requiresParam: false },
+      { action: 'slash_set_gemini_api_key', command: '/set-gemini-api-key', category: 'Settings', description: 'Set Gemini API key', examples: ['/set-gemini-api-key YOUR_API_KEY'], requiresParam: true }
     ];
   }
   
@@ -56,9 +57,7 @@ function getAvailableCommands(ws, stateManager) {
   // If in AI conversation mode, return conversation commands
   if (state.mode === 'ai_conversation') {
     return [
-      { action: 'stop_ai', command: '/stop', category: 'AI', description: 'Stop AI conversation', examples: ['/stop'], requiresParam: false },
-      { action: 'exit_ai', command: 'exit', category: 'AI', description: 'Exit AI conversation', examples: ['exit'], requiresParam: false },
-      { action: 'cancel_ai', command: 'cancel', category: 'AI', description: 'Cancel AI conversation', examples: ['cancel'], requiresParam: false }
+      { action: 'slash_stop_ai_talk', command: '/stoptalkai', category: 'AI', description: 'Stop AI conversation', examples: ['/stoptalkai'], requiresParam: false }
     ];
   }
   

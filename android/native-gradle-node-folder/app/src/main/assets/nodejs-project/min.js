@@ -20,6 +20,8 @@ const AIService = require('./AIService');
 const StateManager = require('./StateManager');
 const ImageManager = require('./ImageManager');
 
+const aiService = new AIService(NoteManager.getSetting('gemini_api_key'));
+
 // Add this helper function near the top of the file
 async function fetchGoogleTTS(text, lang) {
   const https = require('https');
@@ -248,6 +250,16 @@ async function processCommandWithParsed(ws, parsed, autoConfirm) {
     case '/showparents':
       handleShowParentsCommand(ws);
       break;
+    case '/set-gemini-api-key':
+      const apiKey = parsed.args[0];
+      if (apiKey) {
+        NoteManager.setSetting('gemini_api_key', apiKey);
+        aiService.apiKey = apiKey;
+        send(ws, { type: 'reply', text: 'Gemini API key set.' });
+      } else {
+        send(ws, { type: 'reply', text: 'Usage: /set-gemini-api-key <key>' });
+      }
+      break;
     default:
       send(ws, { type: 'reply', text: `Unknown command: ${parsed.cmd}` });
       break;
@@ -414,13 +426,18 @@ async function handleStateModes(ws, text, lowerText, autoConfirm) {
   
   // AI conversation mode
   if (state.mode === 'ai_conversation') {
-    if (['/stop', 'exit', 'cancel'].includes(lowerText)) {
-      StateManager.setState(ws, { mode: 'find_context' });
-      send(ws, { type: 'reply', text: 'AI conversation ended.' });
+    if (lowerText === '/stoptalkai') {
+      aiService.stopConversation();
+      const { findContext } = state;
+      StateManager.setState(ws, { mode: 'find_context', findContext });
+      sendUpdatedCommands(ws);
+      send(ws, { type: 'reply', text: 'AI conversation ended. Returning to note context.' });
       return true;
     }
-    const aiResponse = await AIService.chatWithNote(state.aiConversationNoteId, text);
-    send(ws, { type: 'ai_reply', text: aiResponse.reply });
+    send(ws, { type: 'thinking' });
+    const aiResponse = await aiService.sendMessage(text);
+    send(ws, { type: 'thinking_done' });
+    send(ws, { type: 'reply', text: aiResponse });
     return true;
   }
   
@@ -552,9 +569,17 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         send(ws, { type: 'reply', text: 'No note selected.' });
         return true;
       }
-      StateManager.setState(ws, { mode: 'ai_conversation', aiConversationNoteId: noteToTalk.id });
+      const apiKey = NoteManager.getSetting('gemini_api_key');
+      if (!apiKey) {
+        send(ws, { type: 'reply', text: 'Gemini API key not set. Use /set-gemini-api-key <key> to set it.' });
+        return true;
+      }
+      aiService.apiKey = apiKey;
+      const noteContent = `Title: ${noteToTalk.title}\nDescription: ${noteToTalk.description}`;
+      aiService.startConversation(noteContent);
+      StateManager.setState(ws, { mode: 'ai_conversation', aiConversationNoteId: noteToTalk.id, findContext: state.findContext });
       sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}' (ID: ${noteToTalk.id}). Say /stop to end.` });
+      send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}' (ID: ${noteToTalk.id}). To end the conversation, type /stoptalkai.` });
       return true;
       
     case '/createsubnote':
@@ -841,6 +866,15 @@ wss.on('connection', (ws) => {
         case 'debug': if (o.action === 'get_notes') send(ws, { type: 'debug_notes', notes: JSON.stringify(NoteManager.getAll(), null, 2) }); if (o.action === 'clear_notes') { NoteManager.clearAll(); send(ws, { type: 'debug_cleared' }); } break;
         case 'image_upload':
           await handleImageUpload(ws, o);
+          break;
+        case 'save_settings':
+          if (o.geminiApiKey) {
+            NoteManager.setSetting('gemini_api_key', o.geminiApiKey);
+            aiService.apiKey = o.geminiApiKey;
+            send(ws, { type: 'reply', text: 'API key saved successfully!' });
+          } else {
+            send(ws, { type: 'reply', text: 'Invalid settings format.' });
+          }
           break;
         case 'request_tts':
           try {

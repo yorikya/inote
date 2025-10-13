@@ -20,34 +20,46 @@ const DATA_FILE = getDataFile();
 const NoteManager = {
   notes: [],
   latestNoteId: 0, // Add latestNoteId
+  settings: {},
   load() {
     try {
       if (fs.existsSync(DATA_FILE)) {
         const raw = fs.readFileSync(DATA_FILE, 'utf8');
-        const data = JSON.parse(raw || '{ "notes": [], "latestNoteId": 0 }'); // Parse data object
+        const data = JSON.parse(raw || '{ "notes": [], "latestNoteId": 0, "settings": {} }'); // Parse data object
         this.notes = data.notes || [];
         this.latestNoteId = data.latestNoteId || 0; // Load latestNoteId
+        this.settings = data.settings || {};
       } else {
         this.notes = [];
         this.latestNoteId = 0;
+        this.settings = {};
         this.save();
       }
     } catch (e) {
       console.error('NoteManager.load error', e);
       this.notes = [];
       this.latestNoteId = 0;
+      this.settings = {};
     }
   },
   save() {
     try {
       const data = {
         notes: this.notes,
-        latestNoteId: this.latestNoteId
+        latestNoteId: this.latestNoteId,
+        settings: this.settings
       };
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {
       console.error('NoteManager.save error', e);
     }
+  },
+  getSetting(key) {
+    return this.settings[key];
+  },
+  setSetting(key, value) {
+    this.settings[key] = value;
+    this.save();
   },
   create(title, description = '', parent_id = null) {
     this.latestNoteId++; // Increment latestNoteId

@@ -16,7 +16,7 @@
     {
       "id": "2",
       "title": "Replace generator belt",
-      "description": "",
+      "description": "Fiat tipo 1994, 2.0 16v",
       "parent_id": "1",
       "done": false,
       "images": [],
@@ -74,5 +74,8 @@
       "creation_date": "2025-10-13T06:19:43.708Z"
     }
   ],
-  "latestNoteId": 7
+  "latestNoteId": 7,
+  "settings": {
+    "gemini_api_key": "AIzaSyCp7LuwtRwBuDDdTeC6RPjtLh2CH63vE-A"
+  }
 }

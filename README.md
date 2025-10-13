@@ -93,6 +93,25 @@ android/native-gradle-node-folder/app/libnode/bin/x86_64/libnode.so
 5. Open the Android project in Android Studio by importing the Gradle project at `android/native-gradle-node-folder/`.
 6. Build & Run the app on a device.
 
+### How to Get a Gemini API Key
+
+To use the AI features of Note Speaker, you need a Gemini API key. Here's how to get one:
+
+1.  **Go to Google AI for Developers:** Open your web browser and navigate to [https://ai.google.dev/](https://ai.google.dev/).
+2.  **Create an API Key:**
+    *   Click on the "Get API key in Google AI Studio" button.
+    *   You might be asked to sign in with your Google account.
+    *   In the Google AI Studio, click on the "Get API key" link in the left sidebar.
+    *   Click on the "Create API key" button.
+3.  **Copy Your API Key:**
+    *   Your new API key will be displayed. Copy it to your clipboard.
+4.  **Set the API Key in Note Speaker:**
+    *   In the Note Speaker application, use the following command to set your API key:
+        ```
+        /set-gemini-api-key YOUR_API_KEY
+        ```
+        Replace `YOUR_API_KEY` with the key you copied from the Google AI Studio.
+
 ### How to Build
 
 1.  Navigate to the Android project directory:
