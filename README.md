@@ -73,6 +73,10 @@ Features that relied on the DroidScript environment need to be re-architected fo
 cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project
 npm install
 node min.js # run the server
+
+// or
+
+npm run start
 ```
 
 3. Download the "Node.js on Mobile" shared library zip (the sample used `nodejs-mobile-v0.1.6`):
@@ -103,6 +107,8 @@ android/native-gradle-node-folder/app/libnode/bin/x86_64/libnode.so
     ./gradlew clean assembleDebug
     ```
 
+// or `npm run build`
+
 ### How to Run Tests
 
 The project includes an end-to-end test suite to verify the core conversational flows of the Node.js backend.
@@ -116,7 +122,7 @@ The project includes an end-to-end test suite to verify the core conversational 
 2.  Run the test script:
 
     ```bash
-    npm test
+    npm run test
     ```
 
     This will execute the tests in the `test/` directory and report the results.

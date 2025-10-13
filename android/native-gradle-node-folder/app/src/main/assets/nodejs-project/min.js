@@ -163,7 +163,7 @@ function handleFindNoteCommand(ws, parsed) {
       }
       noteList += '\n';
     });
-    noteList += `\n💡 Use /selectsubnote [id] to select a note`;
+    noteList += `\n💡 Use /findbyid [id] to select a note`;
     send(ws, { type: 'reply', text: noteList });
   }
 }
@@ -245,7 +245,7 @@ async function handleConfirmationAction(ws, action, data, autoConfirm) {
         findContext: { selectedNote: newNote, results: [newNote] }
       });
       
-      const followUpText = `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai, /selectsubnote)`;
+      const followUpText = `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai)`;
       
       send(ws, { type: 'reply', text: followUpText });
       sendUpdatedCommands(ws);
@@ -485,22 +485,6 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       StateManager.setState(ws, { mode: 'ai_conversation', aiConversationNoteId: noteToTalk.id });
       sendUpdatedCommands(ws);
       send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}' (ID: ${noteToTalk.id}). Say /stop to end.` });
-      return true;
-      
-    case '/selectsubnote':
-      if (parsed.args.length === 0) {
-        send(ws, { type: 'reply', text: 'Usage: /selectsubnote [id]' });
-        return true;
-      }
-      const noteId = parsed.args[0];
-      const selectedNote = state.findContext.notes.find(n => String(n.id) === noteId);
-      if (selectedNote) {
-        StateManager.setState(ws, { findContext: { ...state.findContext, selectedNote } });
-        sendUpdatedCommands(ws);
-        send(ws, { type: 'reply', text: `Selected note '${selectedNote.title}' (ID: ${selectedNote.id}).` });
-      } else {
-        send(ws, { type: 'reply', text: 'Note not found in current context.' });
-      }
       return true;
       
     case '/createsubnote':

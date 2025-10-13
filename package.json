@@ -4,11 +4,15 @@
   "description": "Interactive Note Management System with Context-Aware Commands",
   "private": true,
   "scripts": {
-    "test": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:all",
-    "test:quick": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:quick",
-    "test:context": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:context",
-    "test:all": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm run test:all",
-    "install:nodejs": "cd android/native-gradle-node-folder/app/src/main/assets/nodejs-project && npm install"
+    "test": "npm run test:all --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
+    "test:quick": "npm run test:quick --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
+    "test:context": "npm run test:context --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
+    "test:all": "npm run test:all --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
+    "install:nodejs": "npm install --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
+    "start": "node android/native-gradle-node-folder/app/src/main/assets/nodejs-project/min.js",
+    "build": "gradle-wrapper clean assembleDebug",
+    "build:unix": "cd android/native-gradle-node-folder && ./gradlew clean assembleDebug",
+    "build:windows": "cd android/native-gradle-node-folder && gradlew.bat clean assembleDebug"
   },
   "repository": {
     "type": "git",
