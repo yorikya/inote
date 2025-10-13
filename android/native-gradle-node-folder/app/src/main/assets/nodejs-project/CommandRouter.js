@@ -1,3 +1,4 @@
+
 function parseSlashCommand(text) {
   if (!text || !text.startsWith('/')) return null;
   const parts = text.trim().split(/\s+/);
@@ -36,7 +37,11 @@ function getAvailableCommands(ws, stateManager) {
       { action: 'slash_delete', command: '/delete', category: 'Edit', description: 'Delete the note', examples: ['/delete'], requiresParam: false },
       { action: 'slash_create_subnote', command: '/createsubnote', category: 'Create', description: 'Create a sub-note', examples: ['/createsubnote'], requiresParam: true },
       { action: 'slash_talk_ai', command: '/talkai', category: 'AI', description: 'Talk to AI about this note', examples: ['/talkai'], requiresParam: false },
-      { action: 'slash_upload_image', command: '/uploadimage', category: 'Edit', description: 'Upload an image to the note', examples: ['/uploadimage'], requiresParam: false }
+      { action: 'slash_upload_image', command: '/uploadimage', category: 'Edit', description: 'Upload an image to the note', examples: ['/uploadimage'], requiresParam: false },
+      // Add navigation commands
+      { action: 'slash_show_parents', command: '/showparents', category: 'Navigation', description: 'Show all parent notes', examples: ['/showparents'], requiresParam: false },
+      { action: 'slash_find_note', command: '/findnote', category: 'Navigation', description: 'Find notes by title', examples: ['/findnote groceries'], requiresParam: true },
+      { action: 'slash_find_by_id', command: '/findbyid', category: 'Navigation', description: 'Find note by id', examples: ['/findbyid 1'], requiresParam: true }
     ];
   }
   
@@ -81,4 +86,7 @@ function getAvailableCommands(ws, stateManager) {
   ];
 }
 
-module.exports = { parseSlashCommand, getAvailableCommands };
+module.exports = {
+  parseSlashCommand,
+  getAvailableCommands
+};

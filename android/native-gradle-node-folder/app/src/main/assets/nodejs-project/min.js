@@ -20,6 +20,30 @@ const AIService = require('./AIService');
 const StateManager = require('./StateManager');
 const ImageManager = require('./ImageManager');
 
+// Add this helper function near the top of the file
+async function fetchGoogleTTS(text, lang) {
+  const https = require('https');
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+  
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    }, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          resolve(Buffer.concat(chunks).toString('base64'));
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
 // HTTP server
 const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url);
@@ -406,6 +430,19 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       send(ws, { type: 'reply', text: '🏠 Returned to main menu. You can now create or find notes.' });
       return true;
       
+    // Add navigation commands
+    case '/showparents':
+      handleShowParentsCommand(ws);
+      return true;
+      
+    case '/findnote':
+      handleFindNoteCommand(ws, parsed);
+      return true;
+      
+    case '/findbyid':
+      handleFindByIdCommand(ws, parsed);
+      return true;
+      
     case '/delete':
       const noteToDelete = state.findContext.selectedNote;
       if (!noteToDelete) {
@@ -748,6 +785,15 @@ wss.on('connection', (ws) => {
         case 'debug': if (o.action === 'get_notes') send(ws, { type: 'debug_notes', notes: JSON.stringify(NoteManager.getAll(), null, 2) }); if (o.action === 'clear_notes') { NoteManager.clearAll(); send(ws, { type: 'debug_cleared' }); } break;
         case 'image_upload':
           await handleImageUpload(ws, o);
+          break;
+        case 'request_tts':
+          try {
+            const audioData = await fetchGoogleTTS(o.text, o.lang || 'en');
+            send(ws, { type: 'tts_audio', audioData });
+          } catch (error) {
+            console.error('TTS error:', error);
+            send(ws, { type: 'error', message: 'TTS failed' });
+          }
           break;
         default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
       }

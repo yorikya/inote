@@ -56,13 +56,23 @@
     {
       "id": "6",
       "title": "test3",
-      "description": "",
+      "description": "Bla bla bla\n",
       "parent_id": null,
       "done": false,
       "images": [],
       "deleted": false,
       "creation_date": "2025-10-11T13:35:39.879Z"
+    },
+    {
+      "id": "7",
+      "title": "test4",
+      "description": "",
+      "parent_id": "6",
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-13T06:19:43.708Z"
     }
   ],
-  "latestNoteId": 6
+  "latestNoteId": 7
 }

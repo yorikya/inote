@@ -995,28 +995,34 @@ function stopRecording() {
 async function speakText(text) {
   if (!useTTS.checked) return;
   
-  const lang = (Settings.lang === "he") ? "he" : "en";
-  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+  // Check if browser supports Speech Synthesis
+  if (!('speechSynthesis' in window)) {
+    addMsg("❌ Text-to-speech not supported in this browser", "sys");
+    return;
+  }
   
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
     
-    if (response.ok) {
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audio.play();
-      audio.onended = () => URL.revokeObjectURL(audioUrl);
-    } else {
-      addMsg("❌ Cannot read message: No internet connection", "sys");
-    }
+    // Create speech utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Set language based on settings
+    const lang = (Settings.lang === "he") ? "he-IL" : "en-US";
+    utterance.lang = lang;
+    
+    // Optional: Configure voice properties
+    utterance.rate = 1.0;  // Speed (0.1 to 10)
+    utterance.pitch = 1.0; // Pitch (0 to 2)
+    utterance.volume = 1.0; // Volume (0 to 1)
+    
+    // Speak the text
+    window.speechSynthesis.speak(utterance);
+    
   } catch (error) {
-    addMsg("❌ Cannot read message: No internet connection", "sys");
+    console.error('Speech synthesis error:', error);
+    addMsg("❌ Failed to read message", "sys");
   }
 }
 
