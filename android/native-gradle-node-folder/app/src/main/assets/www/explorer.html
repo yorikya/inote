@@ -143,17 +143,6 @@
     <div id="notesGrid" class="notes-grid"></div>
   </div>
   
-  <!-- Image Management Modal -->
-  <div id="imageModal" class="image-modal">
-    <div class="image-modal-content">
-      <div class="image-modal-header">
-        <h3 class="image-modal-title">Manage Images</h3>
-        <button class="image-modal-close" onclick="closeImageModal()">&times;</button>
-      </div>
-      <div id="imageGrid" class="image-grid"></div>
-    </div>
-  </div>
-  
   <!-- Edit Note Modal -->
   <div id="editModal" class="modal">
     <div class="modal-content">
@@ -526,70 +515,69 @@ function saveNoteChanges() {
   }
 }
 
-// Toggle note done status (updated to use WebSocket)
+// Toggle note done status
 function toggleNoteDone(noteId) {
+  console.log('[Toggle] Toggling done status for note:', noteId);
+  
+  // Close any open menus
+  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
+  
+  // Find the note
   const note = allNotes.find(n => String(n.id) === String(noteId));
+  
   if (!note) {
-    alert('Note not found');
+    console.error('[Toggle] Note not found:', noteId);
     return;
   }
   
-  const newStatus = !note.done;
+  console.log('[Toggle] Current note state:', { id: note.id, done: note.done });
   
+  // Send direct update_note message with proper noteId
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const message = {
+    const newDoneState = !note.done;
+    console.log('[Toggle] Sending update_note with noteId:', noteId, 'done:', newDoneState);
+    
+    ws.send(JSON.stringify({
       type: 'update_note',
-      noteId: noteId,
-      updates: {
-        done: newStatus
-      }
-    };
-    
-    ws.send(JSON.stringify(message));
-    showToast(`${newStatus ? '✅' : '⏳'} Marking as ${newStatus ? 'done' : 'pending'}...`);
-    
-    // Close menu
-    document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
-    
-    // Refresh notes
-    setTimeout(() => {
-      loadNotes();
-    }, 500);
+      noteId: String(noteId),  // Ensure it's a string
+      updates: { done: newDoneState }
+    }));
   } else {
-    alert('Cannot update note - connection issue');
+    console.error('[Toggle] WebSocket not ready');
   }
 }
 
-// Delete note (updated to use WebSocket)
+// Delete note
 function deleteNote(noteId) {
+  console.log('[Delete] Deleting note:', noteId);
+  
+  // Close any open menus
+  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
+  
+  // Find the note
   const note = allNotes.find(n => String(n.id) === String(noteId));
+  
   if (!note) {
-    alert('Note not found');
+    console.error('[Delete] Note not found:', noteId);
     return;
   }
   
-  if (!confirm(`Are you sure you want to delete "${note.title}"?`)) {
-    return;
-  }
-  
+  // Send chat command instead of direct WebSocket message
+  // This ensures auto-confirm setting is respected
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const message = {
-      type: 'delete_note',
-      noteId: noteId
-    };
+    // First, set the context by finding the note
+    ws.send(JSON.stringify({
+      type: 'chat',
+      text: `/findbyid ${noteId}`
+    }));
     
-    ws.send(JSON.stringify(message));
-    showToast('🗑️ Deleting note...');
-    
-    // Close menu
-    document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
-    
-    // Refresh notes
+    // Then send the delete command after a short delay
     setTimeout(() => {
-      loadNotes();
-    }, 500);
-  } else {
-    alert('Cannot delete note - connection issue');
+      ws.send(JSON.stringify({
+        type: 'chat',
+        text: '/delete'
+      }));
+    }, 100);
   }
 }
 
@@ -1136,62 +1124,98 @@ function handleImageUrlReceived(data) {
 function showEditMenu(noteId, event) {
   event.stopPropagation();
   event.preventDefault();
-  console.log('[EditMenu] Showing menu for note:', noteId);
+  console.log('[EditMenu] Showing menu for note:', noteId, 'type:', typeof noteId);
   
   // Close any existing menus
   document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
   
-  const note = allNotes.find(n => n.id === noteId);
+  // Find note using string comparison to handle type mismatches
+  const note = allNotes.find(n => String(n.id) === String(noteId));
+  
   if (!note) {
     console.error('[EditMenu] Note not found:', noteId);
+    console.error('[EditMenu] Available note IDs:', allNotes.map(n => `${n.id} (${typeof n.id})`));
     return;
   }
+  
+  console.log('[EditMenu] Found note:', note.title);
   
   // Create menu
   const menu = document.createElement('div');
   menu.className = 'edit-menu';
-  menu.innerHTML = `
-    <div class="edit-menu-item" onclick="event.stopPropagation(); openEditModal(${noteId})">✏️ Edit Note</div>
-    <div class="edit-menu-item" onclick="event.stopPropagation(); openImageModal(${noteId})">🖼️ Manage Images</div>
-    <div class="edit-menu-item" onclick="event.stopPropagation(); toggleNoteDone(${noteId})">${note.done ? '⏳ Mark Pending' : '✅ Mark Done'}</div>
-    <div class="edit-menu-item danger" onclick="event.stopPropagation(); deleteNote(${noteId})">🗑️ Delete Note</div>
-  `;
   
-  // Position menu near the button
-  const button = event.target;
+  // Edit option
+  const editItem = document.createElement('div');
+  editItem.className = 'edit-menu-item';
+  editItem.innerHTML = '✏️ Edit Note';
+  editItem.onclick = (e) => {
+    e.stopPropagation();
+    console.log('[EditMenu] Edit clicked for note:', noteId);
+    openEditModal(noteId);
+  };
+  menu.appendChild(editItem);
+  
+  // Toggle done status
+  const toggleItem = document.createElement('div');
+  toggleItem.className = 'edit-menu-item';
+  toggleItem.innerHTML = note.done ? '⏳ Mark as Pending' : '✅ Mark as Done';
+  toggleItem.onclick = (e) => {
+    e.stopPropagation();
+    toggleNoteDone(noteId);
+  };
+  menu.appendChild(toggleItem);
+  
+  // Delete option
+  const deleteItem = document.createElement('div');
+  deleteItem.className = 'edit-menu-item danger';
+  deleteItem.innerHTML = '🗑️ Delete Note';
+  deleteItem.onclick = (e) => {
+    e.stopPropagation();
+    deleteNote(noteId);
+  };
+  menu.appendChild(deleteItem);
+  
+  // Position and show menu - use event.target instead of event.currentTarget
+  const button = event.target.closest('.note-menu-btn') || event.target;
   const rect = button.getBoundingClientRect();
-  
-  // Position to the left of the button to avoid going off-screen
   menu.style.position = 'fixed';
-  menu.style.right = (window.innerWidth - rect.right) + 'px';
-  menu.style.top = (rect.bottom + 5) + 'px';
-  menu.style.zIndex = '1000';
+  menu.style.top = `${rect.bottom + 5}px`;
+  menu.style.right = `${window.innerWidth - rect.right}px`;
   
   document.body.appendChild(menu);
   
-  console.log('[EditMenu] Menu created and positioned');
-  
   // Close menu when clicking outside
   setTimeout(() => {
-    const closeMenuHandler = function(e) {
-      if (!menu.contains(e.target) && !button.contains(e.target)) {
-        console.log('[EditMenu] Closing menu');
+    document.addEventListener('click', function closeMenuHandler(e) {
+      if (!menu.contains(e.target)) {
         menu.remove();
         document.removeEventListener('click', closeMenuHandler);
       }
-    };
-    document.addEventListener('click', closeMenuHandler);
-  }, 100);
+    });
+  }, 0);
 }
 
-// Handle note card clicks - UPDATED to prevent menu button from triggering card click
+// Handle note card clicks - UPDATED with more debug logs
 document.addEventListener('click', function(e) {
   // Check if it's a menu button click
   if (e.target.classList.contains('note-menu-btn')) {
+    console.log('[Click] ========== MENU BUTTON CLICKED ==========');
     console.log('[Click] Menu button clicked');
+    console.log('[Click] Target element:', e.target);
+    console.log('[Click] data-note-id attribute:', e.target.getAttribute('data-note-id'));
+    console.log('[Click] data-note-id type:', typeof e.target.getAttribute('data-note-id'));
+    
     e.stopPropagation();
     e.preventDefault();
-    const noteId = parseInt(e.target.getAttribute('data-note-id'));
+    
+    const noteIdAttr = e.target.getAttribute('data-note-id');
+    console.log('[Click] Raw noteId from attribute:', noteIdAttr);
+    
+    const noteId = parseInt(noteIdAttr);
+    console.log('[Click] Parsed noteId:', noteId);
+    console.log('[Click] Parsed noteId type:', typeof noteId);
+    console.log('[Click] Is NaN?', isNaN(noteId));
+    
     showEditMenu(noteId, e);
     return;
   }

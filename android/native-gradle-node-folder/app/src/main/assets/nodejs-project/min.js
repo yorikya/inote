@@ -294,6 +294,12 @@ async function handleConfirmationAction(ws, action, data, autoConfirm) {
       send(ws, { type: 'reply', text: `Note marked as done.` });
       break;
       
+    case 'mark_pending':
+      NoteManager.update(data.id, { done: false });
+      send(ws, { type: 'note_updated', note: NoteManager.findById(data.id)[0] });
+      send(ws, { type: 'reply', text: `Note marked as pending.` });
+      break;
+      
     case 'add_image_to_note': {
       const { noteId, imagePath } = data;
       const notes = NoteManager.findById(noteId);
@@ -511,6 +517,33 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       });
       sendUpdatedCommands(ws);
       send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToMark.title}' (ID: ${noteToMark.id}) as done? (yes/no)` });
+      return true;
+      
+    case '/markpending':
+    case '/markundone':
+      const noteToUnmark = state.findContext.selectedNote;
+      if (!noteToUnmark) {
+        send(ws, { type: 'reply', text: 'No note selected.' });
+        return true;
+      }
+      
+      if (autoConfirm || StateManager.getAutoConfirm(ws)) {
+        NoteManager.update(noteToUnmark.id, { done: false });
+        const updatedNote = NoteManager.findById(noteToUnmark.id)[0];
+        send(ws, { type: 'note_updated', note: updatedNote });
+        send(ws, { type: 'reply', text: `Note '${updatedNote.title}' (ID: ${updatedNote.id}) marked as pending.` });
+        return true;
+      }
+      
+      StateManager.setState(ws, {
+        mode: 'pending_confirmation',
+        pendingConfirmation: {
+          action: 'mark_pending',
+          data: { id: noteToUnmark.id, title: noteToUnmark.title },
+        },
+      });
+      sendUpdatedCommands(ws);
+      send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToUnmark.title}' (ID: ${noteToUnmark.id}) as pending? (yes/no)` });
       return true;
       
     case '/talkai':
