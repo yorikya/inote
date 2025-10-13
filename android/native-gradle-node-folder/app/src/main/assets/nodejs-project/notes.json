@@ -82,9 +82,29 @@
       "images": [],
       "deleted": false,
       "creation_date": "2025-10-13T11:51:30.204Z"
+    },
+    {
+      "id": "9",
+      "title": "Can you provide links where I can learn about Gene...",
+      "description": "*Here are some links where you can learn about General Relativity:*\n\n🔍 Full search results: https://duckduckgo.com/?q=learn%20about%20General%20Relativity\n\n*Educational Resources:*\n* [MIT OpenCourseWare](https://ocw.mit.edu/search/?q=learn%20about%20General%20Relativity)\n* [Khan Academy](https://www.khanacademy.org/search?search_again=1&page_search_query=learn%20about%20General%20Relativity)\n* [YouTube](https://www.youtube.com/results?search_query=learn%20about%20General%20Relativity)",
+      "parent_id": "8",
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-13T12:23:31.122Z"
+    },
+    {
+      "id": "10",
+      "title": "Finding Latest Research on Black Hole Mass Calculation",
+      "description": "Here's the main search link so you can explore further:\n\n[Full search results](https://duckduckgo.com/?q=latest%20research%20black%20hole%20mass%20calculation)\n\nI couldn't find specific research papers or summaries directly in the search results to answer your question about the latest research on calculating black hole mass. You may find more information by exploring the provided link.",
+      "parent_id": "8",
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-13T12:38:47.373Z"
     }
   ],
-  "latestNoteId": 8,
+  "latestNoteId": 10,
   "settings": {
     "gemini_api_key": "AIzaSyCp7LuwtRwBuDDdTeC6RPjtLh2CH63vE-A"
   }

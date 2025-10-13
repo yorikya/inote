@@ -10,7 +10,7 @@
     "test:all": "npm run test:all --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
     "install:nodejs": "npm install --prefix android/native-gradle-node-folder/app/src/main/assets/nodejs-project",
     "start": "node android/native-gradle-node-folder/app/src/main/assets/nodejs-project/min.js",
-    "build": "gradle-wrapper clean assembleDebug",
+    "build": "cd android/native-gradle-node-folder && ./gradlew clean assembleDebug",
     "build:unix": "cd android/native-gradle-node-folder && ./gradlew clean assembleDebug",
     "build:windows": "cd android/native-gradle-node-folder && gradlew.bat clean assembleDebug"
   },

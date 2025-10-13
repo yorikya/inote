@@ -434,6 +434,69 @@ async function handleStateModes(ws, text, lowerText, autoConfirm) {
       send(ws, { type: 'reply', text: 'AI conversation ended. Returning to note context.' });
       return true;
     }
+    
+    if (lowerText === '/savetonote') {
+      const lastResponse = aiService.getLastResponse();
+      if (!lastResponse) {
+        send(ws, { type: 'reply', text: 'No AI response to save.' });
+        return true;
+      }
+      
+      const { findContext, aiConversationNoteId } = state;
+      const parentNote = findContext.selectedNote;
+      
+      if (!parentNote) {
+        send(ws, { type: 'reply', text: 'No parent note found.' });
+        return true;
+      }
+      
+      // Find the last user message
+      const conversationHistory = aiService.conversationHistory;
+      let lastUserMessage = "";
+      
+      for (let i = conversationHistory.length - 1; i >= 0; i--) {
+        const entry = conversationHistory[i];
+        if (entry.role === 'user' && entry.parts && entry.parts[0] && entry.parts[0].text) {
+          lastUserMessage = entry.parts[0].text;
+          break;
+        }
+      }
+      
+      // Use Gemini to generate a concise title based on the question and response
+      send(ws, { type: 'thinking' });
+      try {
+        // Create a temporary AI service instance for title generation
+        const tempAIService = new AIService(aiService.apiKey);
+        tempAIService.startConversation("");
+        
+        const titlePrompt = `Create a concise and informative title (max 60 characters) for a note that answers this question: "${lastUserMessage}". The response contains information about: ${lastResponse.substring(0, 200)}...`;
+        const generatedTitle = await tempAIService.sendMessage(titlePrompt);
+        
+        // Clean up the title - remove quotes and ensure it's not too long
+        let title = generatedTitle.replace(/["']/g, '').trim();
+        if (title.length > 60) title = title.substring(0, 60);
+        
+        // Create a new sub-note with the AI response and generated title
+        const newNote = NoteManager.create(title, lastResponse, parentNote.id);
+        send(ws, { type: 'thinking_done' });
+        send(ws, { type: 'created_note', note: newNote });
+        send(ws, { type: 'reply', text: `AI response saved as sub-note "${newNote.title}" (ID: ${newNote.id}) under "${parentNote.title}" (ID: ${parentNote.id}).` });
+      } catch (error) {
+        console.error("Error generating title:", error);
+        // Fallback to a simple title if AI generation fails
+        const fallbackTitle = lastUserMessage.length > 0 
+          ? lastUserMessage.substring(0, 50) + (lastUserMessage.length > 50 ? "..." : "")
+          : "AI Response";
+        
+        const newNote = NoteManager.create(fallbackTitle, lastResponse, parentNote.id);
+        send(ws, { type: 'thinking_done' });
+        send(ws, { type: 'created_note', note: newNote });
+        send(ws, { type: 'reply', text: `AI response saved as sub-note "${newNote.title}" (ID: ${newNote.id}) under "${parentNote.title}" (ID: ${parentNote.id}).` });
+      }
+      
+      return true;
+    }
+    
     send(ws, { type: 'thinking' });
     const aiResponse = await aiService.sendMessage(text);
     send(ws, { type: 'thinking_done' });

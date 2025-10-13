@@ -57,7 +57,8 @@ function getAvailableCommands(ws, stateManager) {
   // If in AI conversation mode, return conversation commands
   if (state.mode === 'ai_conversation') {
     return [
-      { action: 'slash_stop_ai_talk', command: '/stoptalkai', category: 'AI', description: 'Stop AI conversation', examples: ['/stoptalkai'], requiresParam: false }
+      { action: 'slash_stop_ai_talk', command: '/stoptalkai', category: 'AI', description: 'Stop AI conversation', examples: ['/stoptalkai'], requiresParam: false },
+      { action: 'slash_save_to_note', command: '/savetonote', category: 'AI', description: 'Save latest AI response to a sub-note', examples: ['/savetonote'], requiresParam: false }
     ];
   }
   

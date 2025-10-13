@@ -92,6 +92,7 @@ class AIService {
   constructor(apiKey) {
     this.apiKey = apiKey;
     this.conversationHistory = [];
+    this.lastResponse = '';
   }
 
   startConversation(noteContext) {
@@ -111,6 +112,10 @@ This is the note context: ${noteContext}` }] },
 
   stopConversation() {
     this.conversationHistory = [];
+  }
+
+  getLastResponse() {
+    return this.lastResponse;
   }
 
   async _sendRequest() {
@@ -213,6 +218,7 @@ This is the note context: ${noteContext}` }] },
         }
       } else if (part.text) {
         this.conversationHistory.push(candidate.content);
+        this.lastResponse = part.text;
         return part.text;
       }
     }
