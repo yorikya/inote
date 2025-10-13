@@ -673,21 +673,9 @@ function connect() {
     return;
   }
 
-  // Connect to DroidScript WebSocket server on localhost:30000
-  // Auto-detect host: use 10.0.2.2 inside Android emulator, otherwise localhost
-  const host = (function() {
-    try {
-      const h = window.location.hostname;
-      // If page served from file:// or host is localhost, prefer localhost.
-      if (h === 'localhost' || h === '' || h === '127.0.0.1') return '127.0.0.1';
-      // For Android emulator webviews, the host to reach host machine is 10.0.2.2
-      // Detect common emulator UA substring
-      if (navigator.userAgent && navigator.userAgent.indexOf('Android') !== -1) return '10.0.2.2';
-      return h || '127.0.0.1';
-    } catch (e) {
-      return '127.0.0.1';
-    }
-  })();
+  // Connect to Node.js server on localhost:30000
+  // For mobile app, always use 127.0.0.1 for WebSocket connection
+  const host = '127.0.0.1';
   const url = `ws://${host}:30000`;
   ws = new WebSocket(url);
 

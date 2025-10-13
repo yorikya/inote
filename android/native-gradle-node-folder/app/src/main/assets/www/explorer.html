@@ -696,9 +696,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // WebSocket initialization
 function initializeWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // Use localhost as fallback if hostname is empty (DroidScript case)
-  const hostname = window.location.hostname || 'localhost';
-  const wsUrl = `${protocol}//${hostname}:30000`;
+  // For WebSocket, use 127.0.0.1 (localhost) as 0.0.0.0 is not a valid address for connections
+  const wsUrl = `${protocol}//127.0.0.1:30000`;
   
   console.log('Connecting to WebSocket:', wsUrl);
   ws = new WebSocket(wsUrl);
@@ -998,7 +997,6 @@ function createNoteCard(note) {
         <div class="note-title">${escapeHtml(note.title)}</div>
         <div class="note-actions">
           ${isParent ? '<span class="parent-indicator" title="Parent Note">P</span>' : ''}
-          <button class="note-menu-btn" data-note-id="${note.id}" title="More actions">⋯</button>
         </div>
       </div>
       ${note.description ? `<div class="note-description">${escapeHtml(note.description)}</div>` : ''}
@@ -1021,96 +1019,170 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Convert image path for display in web browser
+// Helper function to log image path conversion
+function debugImagePath(imagePath, context) {
+  console.log(`[ImageDebug] ${context}:`, {
+    originalPath: imagePath,
+    startsWithContent: imagePath?.startsWith('content://'),
+    startsWithStorage: imagePath?.startsWith('/storage/'),
+    startsWithSdcard: imagePath?.startsWith('/sdcard/'),
+    startsWithNote: imagePath?.startsWith('note_'),
+    startsWithImages: imagePath?.startsWith('images/')
+  });
+}
+
+// Update convertImagePathForDisplay function with better logging
 function convertImagePathForDisplay(imagePath) {
+  console.log('[ImageDebug] convertImagePathForDisplay input:', imagePath);
+  
   if (!imagePath) {
+    console.error('[ImagePath] No image path provided');
     return null;
   }
   
-  // Handle content:// URIs - request conversion via WebSocket
+  // If it's already a full URL, return as-is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    console.log('[ImagePath] Already a URL:', imagePath);
+    return imagePath;
+  }
+  
+  // If it's a content:// URI, we can't serve it directly
   if (imagePath.startsWith('content://')) {
-    requestContentUriConversion(imagePath);
-    // Return a placeholder that will be updated via WebSocket
-    const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzJhMmYzNiIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYTBhMGEwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+TG9hZGluZy4uLjwvdGV4dD48L3N2Zz4=';
-    return placeholder;
+    console.log('[ImagePath] Content URI detected, cannot serve directly:', imagePath);
+    return null;
   }
   
-  // Handle internal storage paths (from new system) - these should work!
-  if (imagePath.includes('/files/images/') || imagePath.includes('/data/data/')) {
-    console.log('✅ Internal storage path detected:', imagePath);
-    requestImageViaWebSocket(imagePath);
-    // Return a placeholder that will be updated when image data arrives
-    const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzAwODA0MCIvPjx0ZXh0IHg9IjUwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+SW50ZXJuYWw8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjYwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Mb2FkaW5nLi4uPC90ZXh0Pjwvc3ZnPg==';
-    return placeholder;
-  }
-  
-  // Handle external storage paths - these may have permission issues
+  // If it's an absolute file path, we can't serve it directly from WebView
   if (imagePath.startsWith('/storage/') || imagePath.startsWith('/sdcard/')) {
-    console.log('⚠️ External storage path detected (may have permission issues):', imagePath);
-    requestImageViaWebSocket(imagePath);
-    // Return a placeholder that will be updated when image data arrives
-    const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2ZmYTUwMCIvPjx0ZXh0IHg9IjUwIiB5PSI0MCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEwIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+UGVybWlzc2lvbjwvdGV4dD48dGV4dCB4PSI1MCIgeT0iNjAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPklzc3VlPC90ZXh0Pjwvc3ZnPg==';
-    return placeholder;
+    console.log('[ImagePath] Absolute file path detected, cannot serve directly:', imagePath);
+    return null;
   }
   
-  // Handle relative paths (legacy and new)
-  if (!imagePath.startsWith('/') && !imagePath.startsWith('http')) {
-    // If it's an old path with "images/", remove it.
-    if (imagePath.startsWith('images/')) {
-        imagePath = imagePath.substring('images/'.length);
-    }
-    return `/image/${imagePath}`;
-  }
-  
-  return imagePath;
+  // For relative paths (like "note_1_123456_image.jpg"), serve from backend
+  // For mobile app, use 127.0.0.1 to access the local Node.js server
+  const imageUrl = `http://127.0.0.1:30000/image/${imagePath}`;
+  console.log('[ImagePath] Converted relative path to URL:', imageUrl);
+  return imageUrl;
 }
 
-// Request content URI conversion via WebSocket
-function requestContentUriConversion(contentUri) {
-  console.log('DEBUG: requestContentUriConversion called with:', contentUri);
-  console.log('DEBUG: WebSocket state:', ws ? ws.readyState : 'WebSocket is null');
-  
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    console.log('DEBUG: Sending content URI conversion request via WebSocket');
-    const message = {
-      type: 'convert_content_uri',
-      contentUri: contentUri
-    };
-    console.log('DEBUG: WebSocket message:', JSON.stringify(message));
-    ws.send(JSON.stringify(message));
-  } else {
-    console.log('DEBUG: WebSocket not available for URI conversion - state:', ws ? ws.readyState : 'null');
-  }
-}
-
-// Request image data via WebSocket
+// Update requestImageViaWebSocket with better logging
 function requestImageViaWebSocket(imagePath) {
+  console.log('[ImageRequest] Requesting image via WebSocket:', imagePath);
+  
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const requestId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     const message = {
       type: 'request_image',
-      imagePath: imagePath,
-      requestId: requestId
+      path: imagePath
     };
+    console.log('[ImageRequest] Sending message:', message);
     ws.send(JSON.stringify(message));
+  } else {
+    console.error('[ImageRequest] WebSocket not ready, state:', ws?.readyState);
   }
 }
 
-// Handle successful URI conversion
-function handleUriConversionSuccess(data) {
-  console.log('DEBUG: URI conversion successful:', data.contentUri, '->', data.filePath);
+// Update createNoteCard to add more logging
+function createNoteCard(note) {
+  const isCompleted = note.done === true;
+  const isParent = !note.parent_id;
+  const hasSubNotes = note.subNotes && note.subNotes.length > 0;
+  const subNotesCount = hasSubNotes ? note.subNotes.length : 0;
+  const hasImages = note.images && note.images.length > 0;
+  const imageCount = hasImages ? note.images.length : 0;
   
-  // Find all image elements that need updating
-  const imageElements = document.querySelectorAll(`img[data-content-uri="${data.contentUri}"]`);
+  console.log(`[CreateCard] Creating card for note ${note.id}, images: ${imageCount}`);
+  if (hasImages) {
+    console.log(`[CreateCard] Note ${note.id} image paths:`, note.images);
+  }
   
-  imageElements.forEach(img => {
-    // Request the converted image via WebSocket instead of HTTP
-    console.log('DEBUG: Requesting converted image via WebSocket:', data.filePath);
-    requestImageViaWebSocket(data.filePath);
-    img.removeAttribute('data-content-uri');
-    // Add a data attribute to track this image for when the data arrives
-    img.setAttribute('data-image-path', data.filePath);
-  });
+  const statusText = isCompleted ? 'Completed' : 'Pending';
+  const statusClass = isCompleted ? 'completed' : 'pending';
+  
+  const createdAt = note.creation_date ? new Date(note.creation_date).toLocaleDateString() : 'Unknown';
+  
+  // Generate image preview HTML
+  let imagePreviewHtml = '';
+  if (hasImages) {
+    const firstImage = note.images[0];
+    console.log(`[CreateCard] Note ${note.id} first image:`, firstImage);
+    
+    const displayPath = convertImagePathForDisplay(firstImage);
+    console.log(`[CreateCard] Note ${note.id} display path:`, displayPath);
+    
+    if (displayPath) {
+      const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
+      const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
+        `data-image-path="${firstImage}"` : '';
+      
+      if (imageCount === 1) {
+        imagePreviewHtml = `
+          <div class="note-images" data-note-id="${note.id}">
+            <div class="image-preview-container">
+              <img class="image-preview-img" 
+                   src="${displayPath}" 
+                   alt="Note image" 
+                   ${contentUriAttr} 
+                   ${imagePathAttr}
+                   onload="console.log('[ImageLoad] Successfully loaded image for note ${note.id}:', this.src)"
+                   onerror="console.error('[ImageError] Failed to load image for note ${note.id}:', this.src); this.parentElement.innerHTML='<div class='image-error'>📷 Image not found<br><small>Path: ${firstImage}</small></div>'"
+                   onclick="showImageManagement('${note.id}')">
+            </div>
+          </div>
+        `;
+      } else {
+        imagePreviewHtml = `
+          <div class="note-images" data-note-id="${note.id}">
+            <div class="image-preview-container">
+              <img class="image-preview-img" 
+                   id="note-img-${note.id}" 
+                   src="${displayPath}" 
+                   alt="Note image" 
+                   ${contentUriAttr} 
+                   ${imagePathAttr}
+                   onload="console.log('[ImageLoad] Successfully loaded image for note ${note.id}:', this.src)"
+                   onerror="console.error('[ImageError] Failed to load image for note ${note.id}:', this.src); this.parentElement.innerHTML='<div class='image-error'>📷 ${imageCount} images<br><small>Click to manage</small></div>'"
+                   onclick="showImageManagement('${note.id}')">
+              <div class="image-counter">1 / ${imageCount}</div>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      console.error(`[CreateCard] No display path for note ${note.id}`);
+      imagePreviewHtml = `
+        <div class="note-images" data-note-id="${note.id}">
+          <div class="image-preview-container">
+            <div class="image-error">📷 ${imageCount} image${imageCount > 1 ? 's' : ''}<br><small>Click to manage</small></div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // Rest of the card HTML...
+  return `
+    <div class="note-card ${statusClass}" data-note-id="${note.id}">
+      <div class="note-header">
+        <h3 class="note-title">${escapeHtml(note.title)}</h3>
+      </div>
+      
+      ${imagePreviewHtml}
+      
+      ${note.description ? `<p class="note-description">${escapeHtml(note.description)}</p>` : ''}
+      
+      <div class="note-meta">
+        <span class="note-status ${statusClass}">${statusText}</span>
+        ${isParent ? '<span class="note-badge parent">📁 Parent</span>' : ''}
+        ${hasSubNotes ? `<span class="note-badge subnotes">📋 ${subNotesCount} sub-note${subNotesCount > 1 ? 's' : ''}</span>` : ''}
+        ${hasImages ? `<span class="note-badge images">📷 ${imageCount}</span>` : ''}
+      </div>
+      
+      <div class="note-footer">
+        <span class="note-id">#${note.id}</span>
+        <span class="note-date">${createdAt}</span>
+      </div>
+    </div>
+  `;
 }
 
 // Handle image data received via WebSocket
@@ -1246,6 +1318,18 @@ function showEditMenu(noteId, event) {
   const menu = document.createElement('div');
   menu.className = 'edit-menu';
   
+  // Open in chat option
+  const openChatItem = document.createElement('div');
+  openChatItem.className = 'edit-menu-item';
+  openChatItem.innerHTML = '💬 Open In Chat';
+  openChatItem.onclick = (e) => {
+    e.stopPropagation();
+    console.log('[EditMenu] Open in chat clicked for note:', noteId);
+    // Navigate to chat and automatically execute /findbyid command
+    window.location.href = `index.html?findbyid=${noteId}`;
+  };
+  menu.appendChild(openChatItem);
+
   // Edit option
   const editItem = document.createElement('div');
   editItem.className = 'edit-menu-item';
@@ -1328,17 +1412,49 @@ document.addEventListener('click', function(e) {
     return;
   }
   
-  // Check if it's a note card click (but not on menu button or actions)
+  // Check if it's a note card click (but not on actions area)
   const noteCard = e.target.closest('.note-card');
   if (noteCard && !e.target.closest('.note-actions') && !e.target.closest('.edit-menu')) {
     const noteId = noteCard.getAttribute('data-note-id');
     if (noteId) {
-      console.log('[Click] Note card clicked, navigating to chat');
-      // Navigate to chat and automatically execute /findbyid command
-      window.location.href = `index.html?findbyid=${noteId}`;
+      console.log('[Click] Note card clicked, opening menu');
+      // Open the menu instead of navigating to chat
+      showEditMenu(noteId, e);
     }
   }
 });
+
+// Add this after the convertImagePathForDisplay function
+
+// Enhanced image error handler
+function handleImageLoadError(imgElement, imagePath) {
+  console.error('Image failed to load:', imagePath);
+  console.error('Image element:', imgElement);
+  console.error('Current src:', imgElement.src);
+  
+  // Show detailed error information
+  const errorDiv = document.createElement('div');
+  errorDiv.className = 'image-error';
+  errorDiv.innerHTML = `
+    📷 Image Load Failed<br>
+    <small style="font-size: 10px; opacity: 0.7;">
+      Path: ${imagePath.substring(0, 30)}...<br>
+      Click to retry
+    </small>
+  `;
+  
+  errorDiv.onclick = () => {
+    console.log('Retrying image load for:', imagePath);
+    const newSrc = convertImagePathForDisplay(imagePath);
+    if (newSrc) {
+      imgElement.src = newSrc;
+      errorDiv.remove();
+    }
+  };
+  
+  imgElement.parentElement.appendChild(errorDiv);
+  imgElement.style.display = 'none';
+}
 </script>
 </body>
 </html>

@@ -55,16 +55,66 @@ const server = http.createServer((req, res) => {
   // Serve images saved under /image/<rel>
   if (p && p.startsWith('/image/')) {
     const filename = decodeURIComponent(p.replace('/image/', ''));
-    const fp = path.join(__dirname, 'images', filename);
-    if (require('fs').existsSync(fp)) {
+    console.log('[ImageServer] === Image Request Start ===');
+    console.log('[ImageServer] Requested image:', filename);
+    console.log('[ImageServer] Request URL:', p);
+    console.log('[ImageServer] Current working directory:', __dirname);
+    
+    // Try multiple possible image locations
+    const possiblePaths = [
+      path.join(__dirname, 'images', filename),
+      path.join(__dirname, filename),
+      // Handle note_X folder structure
+      path.join(__dirname, 'images', filename.split('/').pop()),
+      // Try path with note_ prefix
+      path.join(__dirname, 'images', 'note_' + filename.split('_')[0], filename)
+    ];
+
+    console.log('[ImageServer] Possible paths to check:');
+    possiblePaths.forEach((p, i) => console.log(`[ImageServer] ${i+1}. ${p}`));
+    
+    let fp = null;
+    for (const testPath of possiblePaths) {
+      console.log(`[ImageServer] Checking path: ${testPath}`);
+      if (require('fs').existsSync(testPath)) {
+        fp = testPath;
+        console.log(`[ImageServer] ✓ Found image at: ${fp}`);
+
+        // Get file stats for additional info
+        const stats = require('fs').statSync(fp);
+        console.log(`[ImageServer] File size: ${stats.size} bytes`);
+        console.log(`[ImageServer] File modified: ${stats.mtime}`);
+        break;
+      } else {
+        console.log(`[ImageServer] ✗ File not found at: ${testPath}`);
+      }
+    }
+    
+    if (fp) {
       const ext = path.extname(fp).toLowerCase();
-      const map = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.gif': 'image/gif' };
+      const map = { 
+        '.png': 'image/png', 
+        '.jpg': 'image/jpeg', 
+        '.jpeg': 'image/jpeg', 
+        '.svg': 'image/svg+xml', 
+        '.gif': 'image/gif' 
+      };
       const type = map[ext] || 'application/octet-stream';
-      res.writeHead(200, { 'Content-Type': type });
+      res.writeHead(200, { 
+        'Content-Type': type,
+        'Cache-Control': 'public, max-age=31536000'
+      });
       const stream = require('fs').createReadStream(fp);
+      stream.on('error', (err) => {
+        console.error('Error reading image file:', err);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Error reading image');
+      });
       stream.pipe(res);
       return;
     }
+    
+    console.error('Image not found:', filename, 'tried paths:', possiblePaths);
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Image not found');
     return;
