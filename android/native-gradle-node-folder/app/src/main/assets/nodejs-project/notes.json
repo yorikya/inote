@@ -72,9 +72,19 @@
       "images": [],
       "deleted": false,
       "creation_date": "2025-10-13T06:19:43.708Z"
+    },
+    {
+      "id": "8",
+      "title": "Black Holes",
+      "description": "",
+      "parent_id": null,
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-13T11:51:30.204Z"
     }
   ],
-  "latestNoteId": 7,
+  "latestNoteId": 8,
   "settings": {
     "gemini_api_key": "AIzaSyCp7LuwtRwBuDDdTeC6RPjtLh2CH63vE-A"
   }

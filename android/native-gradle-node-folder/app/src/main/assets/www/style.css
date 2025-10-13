@@ -95,3 +95,29 @@
     background: #ff4444;
     box-shadow: 0 0 8px rgba(255, 68, 68, 0.3);
   }
+
+  /* Add these styles to your existing CSS */
+  .msg-content a {
+    color: #4a9eff;
+    text-decoration: underline;
+    word-break: break-all;
+    cursor: pointer;
+  }
+
+  .msg-content a:hover {
+    color: #6bb3ff;
+    text-decoration: none;
+  }
+
+  .msg-content a:visited {
+    color: #8b7fff;
+  }
+
+  /* Ensure links work well in both light and dark themes */
+  .msg.bot .msg-content a {
+    color: #6bb3ff;
+  }
+
+  .msg.you .msg-content a {
+    color: #4a9eff;
+  }

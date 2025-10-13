@@ -1072,6 +1072,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* ---------- Utilities ---------- */
+// Replace the existing addMsg function with this enhanced version
 function addMsg(text, who) {
   const div = document.createElement("div");
   div.className = "msg " + (who === "you" ? "you" : who === "bot" ? "bot" : "sys");
@@ -1079,7 +1080,10 @@ function addMsg(text, who) {
   // Create message content with timestamp
   const messageContent = document.createElement("div");
   messageContent.className = "msg-content";
-  messageContent.textContent = text;
+  
+  // Convert URLs to clickable links
+  const linkedText = linkifyText(text);
+  messageContent.innerHTML = linkedText; // Use innerHTML to render links
   
   // Create timestamp
   const timestamp = document.createElement("div");
@@ -1102,6 +1106,34 @@ function addMsg(text, who) {
   
   scrollToBottom();
 }
+
+// Helper function to convert URLs in text to clickable links
+function linkifyText(text) {
+  // Escape HTML to prevent XSS attacks
+  const escapeHtml = (str) => {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  };
+  
+  // Escape the text first
+  let escapedText = escapeHtml(text);
+  
+  // URL regex pattern that matches http://, https://, and www. URLs
+  const urlPattern = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
+  
+  // Replace URLs with clickable links
+  const linkedText = escapedText.replace(urlPattern, (url) => {
+    // Add https:// if URL starts with www.
+    const href = url.startsWith('www.') ? 'https://' + url : url;
+    
+    // Create a clickable link that opens in a new tab
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #4a9eff; text-decoration: underline;">${url}</a>`;
+  });
+  
+  return linkedText;
+}
+
 function scrollToBottom(){ logEl.scrollTop = logEl.scrollHeight; }
 
 // Format timestamp for display (like WhatsApp)
@@ -1606,5 +1638,4 @@ function resizeAndCompressImage(file, callback) {
 
 </script>
 </body>
-</html>
 </html>
