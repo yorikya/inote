@@ -86,6 +86,13 @@ const NoteManager = {
     this.save();
     return note;
   },
+  removeImage(noteId, imagePath) {
+    const note = this.notes.find(n => n.id === noteId && !n.deleted);
+    if (!note || !note.images) return null;
+    note.images = note.images.filter(p => p !== imagePath);
+    this.save();
+    return note;
+  },
   findByTitle(q) { const lower = (q||'').toLowerCase(); return this.notes.filter(n => !n.deleted && (n.title||'').toLowerCase().includes(lower)); },
   findById(id) { return this.notes.filter(n => !n.deleted && n.id === id); },
   findChildren(parentId) { return this.notes.filter(n => !n.deleted && n.parent_id === parentId); },

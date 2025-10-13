@@ -116,6 +116,43 @@
   .nav-button.secondary {
     background: #2a2f36 !important;
   }
+
+  .edit-note-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .edit-note-image-item {
+    position: relative;
+    width: 100px;
+    height: 100px;
+  }
+
+  .edit-note-image-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+
+  .edit-note-image-item .delete-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 </style>
 </head>
 <body>
@@ -167,6 +204,12 @@
         <div>
           <label>Description</label>
           <textarea id="editNoteDescription" rows="6" placeholder="Enter note description"></textarea>
+        </div>
+
+        <!-- Images -->
+        <div>
+          <label>Images</label>
+          <div id="editNoteImages" class="edit-note-images"></div>
         </div>
         
         <!-- Status -->
@@ -237,6 +280,7 @@ const editNoteId = document.getElementById("editNoteId");
 const editNoteTitle = document.getElementById("editNoteTitle");
 const editNoteDescription = document.getElementById("editNoteDescription");
 const editNoteDone = document.getElementById("editNoteDone");
+const editNoteImages = document.getElementById("editNoteImages");
 
 // State
 let allNotes = [];
@@ -454,6 +498,27 @@ function openEditModal(noteId) {
   document.getElementById('editNoteTitle').value = note.title || '';
   document.getElementById('editNoteDescription').value = note.description || '';
   document.getElementById('editNoteDone').checked = note.done === true;
+
+  // Populate images
+  editNoteImages.innerHTML = '';
+  if (note.images && note.images.length > 0) {
+    note.images.forEach(imagePath => {
+      const imgContainer = document.createElement('div');
+      imgContainer.className = 'edit-note-image-item';
+
+      const img = document.createElement('img');
+      img.src = convertImagePathForDisplay(imagePath);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.innerHTML = '&times;';
+      deleteBtn.onclick = () => deleteNoteImage(note.id, imagePath, imgContainer);
+
+      imgContainer.appendChild(img);
+      imgContainer.appendChild(deleteBtn);
+      editNoteImages.appendChild(imgContainer);
+    });
+  }
   
   // Show the modal
   const modal = document.getElementById('editModal');
@@ -512,6 +577,43 @@ function saveNoteChanges() {
   } else {
     console.error('[Edit] WebSocket not available');
     alert('Cannot save changes - connection issue. Please try again.');
+  }
+}
+
+// Delete a note image
+function deleteNoteImage(noteId, imagePath, elementToRemove) {
+  if (!confirm('Are you sure you want to delete this image?')) return;
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    // Set context to the note first
+    ws.send(JSON.stringify({
+      type: 'chat',
+      text: `/findbyid ${noteId}`
+    }));
+
+    // Then send the delete image command
+    setTimeout(() => {
+      ws.send(JSON.stringify({
+        type: 'chat',
+        text: `/deleteimage ${imagePath}`
+      }));
+
+      // Immediately remove the image from the view
+      if (elementToRemove) {
+        elementToRemove.remove();
+      }
+
+      // Update the local notes array
+      const note = allNotes.find(n => String(n.id) === String(noteId));
+      if (note && note.images) {
+        note.images = note.images.filter(p => p !== imagePath);
+      }
+
+      // Refresh the main notes grid in the background
+      loadNotes();
+    }, 100);
+  } else {
+    alert('Cannot delete image - connection issue. Please try again.');
   }
 }
 

@@ -38,6 +38,7 @@ function getAvailableCommands(ws, stateManager) {
       { action: 'slash_create_subnote', command: '/createsubnote', category: 'Create', description: 'Create a sub-note', examples: ['/createsubnote'], requiresParam: true },
       { action: 'slash_talk_ai', command: '/talkai', category: 'AI', description: 'Talk to AI about this note', examples: ['/talkai'], requiresParam: false },
       { action: 'slash_upload_image', command: '/uploadimage', category: 'Edit', description: 'Upload an image to the note', examples: ['/uploadimage'], requiresParam: false },
+      { action: 'slash_delete_image', command: '/deleteimage', category: 'Edit', description: 'Delete an image from the note', examples: ['/deleteimage image.jpg'], requiresParam: true },
       // Add navigation commands
       { action: 'slash_show_parents', command: '/showparents', category: 'Navigation', description: 'Show all parent notes', examples: ['/showparents'], requiresParam: false },
       { action: 'slash_find_note', command: '/findnote', category: 'Navigation', description: 'Find notes by title', examples: ['/findnote groceries'], requiresParam: true },

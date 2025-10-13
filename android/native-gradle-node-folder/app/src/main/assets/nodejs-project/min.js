@@ -578,6 +578,29 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       }
       return true;
 
+    case '/deleteimage':
+      const noteWithImage = state.findContext.selectedNote;
+      if (!noteWithImage) {
+        send(ws, { type: 'reply', text: 'No note selected.' });
+        return true;
+      }
+      const imagePath = parsed.args.join(' ');
+      if (!imagePath) {
+        send(ws, { type: 'reply', text: 'No image specified.' });
+        return true;
+      }
+
+      // Remove image from note
+      NoteManager.removeImage(noteWithImage.id, imagePath);
+
+      // Delete image from filesystem
+      ImageManager.deleteImage(imagePath);
+
+      const updatedNote = NoteManager.findById(noteWithImage.id)[0];
+      send(ws, { type: 'note_updated', note: updatedNote });
+      send(ws, { type: 'reply', text: `Image ${imagePath} deleted from note '${updatedNote.title}'.` });
+      return true;
+
     case '/uploadimage':
       const noteToUpload = state.findContext.selectedNote;
       if (!noteToUpload) {
