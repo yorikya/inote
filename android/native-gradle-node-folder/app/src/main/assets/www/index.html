@@ -92,46 +92,7 @@
       <button id="settingsButton" class="nav-button secondary">⚙️ Settings</button>
     </div>
     
-    <h3>Gemini API Configuration</h3>
-    <label for="geminiApiKey">Gemini API Key:</label>
-    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
-    <button id="saveApiKey">Save API Key</button>
-    <button id="useDefaultKey" class="secondary">Use Default Key</button>
-    
-    <div style="margin-top:20px;">
-      <h3>Current Status</h3>
-      <div id="apiStatus">Using default API key</div>
-    </div>
-    
-    <div style="margin-top:20px;">
-        <h3>Workflow Settings</h3>
-        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
-          <button id="toggleAutoConfirmBtn" class="nav-button" style="background:#2d5a87; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:14px;">
-            Auto Confirm: OFF
-          </button>
-          <small style="color:#666; font-size:12px;">Toggle auto confirmation for all actions</small>
-        </div>
-      <div style="font-size:12px; color:#a0a0a0; margin-bottom:16px;">
-        When enabled, the system will automatically proceed with "Yes" for all confirmation prompts (note creation, deletion, marking as done, etc.)
-      </div>
-    </div>
-    
-    <div style="margin-top:20px;">
-      <h3>Chat History</h3>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <button id="clearChatHistory" class="secondary" style="background:#ff6b35;">🗑️ Clear Chat History</button>
-        <small style="color:#a0a0a0; font-size:12px;">Clear all chat messages and history</small>
-      </div>
-    </div>
-    
-    <div style="margin-top:20px;">
-      <h3>Debug Tools</h3>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <button id="showNotes">Show Notes (Debug)</button>
-        <button id="clearNotes" class="secondary" style="background:#ff4444;">🗑️ Clear All Notes (DANGER)</button>
-      </div>
-      <div id="notesDisplay" style="margin-top:10px; padding:10px; background:#2a2f36; border-radius:6px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:12px; white-space:pre-wrap; display:none;"></div>
-    </div>
+
   </div>
 </div>
 
@@ -147,37 +108,7 @@ const Settings = {
 let currentNoteId = null;
 let selectedFiles = [];
 
-var GlobalAutoConfirm = {
-  enabled: false,
-  toggle: function() {
-    this.enabled = !this.enabled;
-    Settings.autoConfirm = this.enabled;
-    this.updateUI();
-    this.saveToStorage();
-    this.updateBackend();
-    return this.enabled;
-  },
-  updateUI: function() {
-    const btn = document.getElementById('toggleAutoConfirmBtn');
-    if (btn) {
-      btn.textContent = `Auto Confirm: ${this.enabled ? 'ON' : 'OFF'}`;
-      btn.style.background = this.enabled ? '#28a745' : '#2d5a87';
-    }
-  },
-  saveToStorage: function() {
-    localStorage.setItem('globalAutoConfirm', this.enabled.toString());
-  },
-  loadFromStorage: function() {
-    const saved = localStorage.getItem('globalAutoConfirm');
-    this.enabled = saved === 'true';
-    Settings.autoConfirm = this.enabled;
-    this.updateUI();
-  },
-  updateBackend: function() {
-    sendToWorker({ type: 'set_auto_confirm', enabled: this.enabled });
-    Settings.autoConfirm = this.enabled;
-  }
-};
+
 
 /* ---------- UI wiring ---------- */
 const logEl   = document.getElementById("log");
@@ -191,14 +122,7 @@ const menuBtn = document.getElementById("menuBtn");
 const sideMenu = document.getElementById("sideMenu");
 const overlay = document.getElementById("overlay");
 const closeMenu = document.getElementById("closeMenu");
-const geminiApiKey = document.getElementById("geminiApiKey");
-const saveApiKey = document.getElementById("saveApiKey");
-const useDefaultKey = document.getElementById("useDefaultKey");
-const apiStatus = document.getElementById("apiStatus");
-const showNotes = document.getElementById("showNotes");
-const notesDisplay = document.getElementById("notesDisplay");
-const clearNotes = document.getElementById("clearNotes");
-const clearChatHistoryBtn = document.getElementById("clearChatHistory");
+
 const chatButton = document.getElementById("chatButton");
 const explorerButton = document.getElementById("explorerButton");
 const settingsButton = document.getElementById("settingsButton");
@@ -342,7 +266,6 @@ document.addEventListener('click', (e) => {
 menuBtn.onclick = () => {
   sideMenu.classList.add("open");
   overlay.classList.add("show");
-  loadStoredApiKey();
 };
 
 closeMenu.onclick = () => {
@@ -363,72 +286,7 @@ chatButton.onclick = () => navigateToPage('index.html');
 explorerButton.onclick = () => navigateToPage('explorer.html');
 settingsButton.onclick = () => navigateToPage('settings.html');
 
-const toggleAutoConfirmBtn = document.getElementById('toggleAutoConfirmBtn');
-if (toggleAutoConfirmBtn) {
-  toggleAutoConfirmBtn.onclick = () => GlobalAutoConfirm.toggle();
-}
 
-function loadStoredApiKey() {
-  const storedKey = localStorage.getItem('geminiApiKey');
-  if (storedKey) {
-    geminiApiKey.value = storedKey;
-    Settings.geminiApiKey = storedKey;
-    apiStatus.textContent = "Using custom API key";
-    apiStatus.style.color = "#4CAF50";
-  } else {
-    apiStatus.textContent = "Using default API key";
-    apiStatus.style.color = "#FFA500";
-  }
-  GlobalAutoConfirm.loadFromStorage();
-  Settings.autoConfirm = GlobalAutoConfirm.enabled;
-}
-
-saveApiKey.onclick = () => {
-  const key = geminiApiKey.value.trim();
-  if (key) {
-    localStorage.setItem('geminiApiKey', key);
-    Settings.geminiApiKey = key;
-    apiStatus.textContent = "Custom API key saved";
-    apiStatus.style.color = "#4CAF50";
-    addMsg("✅ API key saved!", "sys");
-    sendToWorker({ type: 'save_settings', geminiApiKey: key });
-  } else {
-    addMsg("❌ Please enter a valid API key", "sys");
-  }
-};
-
-useDefaultKey.onclick = () => {
-  localStorage.removeItem('geminiApiKey');
-  Settings.geminiApiKey = "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4";
-  geminiApiKey.value = "";
-  apiStatus.textContent = "Using default API key";
-  apiStatus.style.color = "#FFA500";
-  addMsg("✅ Switched to default API key", "sys");
-  sendToWorker({ type: 'save_settings', geminiApiKey: Settings.geminiApiKey });
-};
-
-showNotes.onclick = () => {
-  if (notesDisplay.style.display === "none") {
-    sendToWorker({type:'debug', action:'get_notes'});
-    showNotes.textContent = "Hide Notes";
-  } else {
-    showNotes.textContent = "Show Notes (Debug)";
-    notesDisplay.style.display = "none";
-  }
-};
-
-clearNotes.onclick = () => {
-  if (confirm("DANGER: This will permanently delete all notes. Are you sure?")) {
-    sendToWorker({type:'debug', action:'clear_notes'});
-  }
-};
-
-clearChatHistoryBtn.onclick = () => {
-  if (confirm("Are you sure you want to clear the chat history?")) {
-    clearChatHistory();
-    addMsg("🗑️ Chat history cleared", "sys");
-  }
-};
 
 /* ---------- Service Worker and WebSocket Logic ---------- */
 function sendToWorker(messageObject) {
@@ -499,10 +357,7 @@ function initializeServiceWorker() {
                 }
                 else if(msg.type==='request_image_upload') { showUploadModal(msg.data.noteId); }
                 else if(msg.type==='trigger_image_upload') { currentNoteId = msg.noteId; localStorage.setItem('currentNoteId', currentNoteId); showUploadModal(msg.noteId); }
-                else if(msg.type==='debug_notes') { notesDisplay.textContent = msg.notes; notesDisplay.style.display = "block"; }
-                else if(msg.type==='debug_cleared') { addMsg("All notes cleared!", "sys"); notesDisplay.style.display = "none"; showNotes.textContent = "Show Notes (Debug)"; }
                 else if(msg.type==='available_commands') { availableCommands = msg.commands || []; commandsLoaded = true; }
-                else if(msg.type==='auto_confirm_status') { GlobalAutoConfirm.enabled = msg.enabled; Settings.autoConfirm = msg.enabled; GlobalAutoConfirm.updateUI(); }
                 else if(msg.type==='found_notes' && (!msg.notes || msg.notes.length === 0)) { addMsg('No notes found', 'bot'); }
                 else if(msg.type==='thinking') { showThinkingIndicator(); }
                 else if(msg.type==='thinking_done') { hideThinkingIndicator(); }
