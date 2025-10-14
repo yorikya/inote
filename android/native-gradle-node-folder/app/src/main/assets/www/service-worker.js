@@ -1,5 +1,5 @@
 let ws;
-const wsUrl = 'ws://127.0.0.1:30000';
+const wsUrl = 'ws://localhost:30000';
 let reconnectInterval = 3000;
 let reconnectTimer = null;
 
