@@ -79,6 +79,9 @@
   </div>
 </div>
 
+<!-- Load shared WebSocket client -->
+<script src="shared-websocket.js"></script>
+
 <script>
 const menuBtn = document.getElementById("menuBtn");
 const sideMenu = document.getElementById("sideMenu");
@@ -101,11 +104,7 @@ const editNoteImages = document.getElementById("editNoteImages");
 let allNotes = [], filteredNotes = [], currentFilter = 'all', noteImageStates = {}, imageRotationIntervals = {};
 
 function sendToWorker(msg) {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage(JSON.stringify(msg));
-    } else {
-        console.error("Service worker not ready");
-    }
+    SharedWebSocket.send(msg);
 }
 
 function showEditMenu(noteId, event) {
@@ -226,37 +225,35 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./service-worker.js').then(reg => {
-            console.log('Service Worker registered.');
-            if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
-        }).catch(err => console.error('SW registration failed:', err));
-
-        navigator.serviceWorker.addEventListener('message', event => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'ws_open') return loadNotes();
-                handleWebSocketMessage(data);
-            } catch (e) { console.error("Error parsing SW message", e); }
-        });
-    } else { alert("Service Workers are not supported."); }
+    // Use shared WebSocket instead of direct service worker communication
+    SharedWebSocket.registerHandler('ws_open', () => {
+        loadNotes();
+    });
+    
+    SharedWebSocket.registerHandler('all_notes', (data) => {
+        allNotes = data.notes || [];
+        applyCurrentFilter();
+        renderNotes();
+    });
+    
+    SharedWebSocket.registerHandler('note_updated', (data) => {
+        loadNotes();
+    });
+    
+    SharedWebSocket.registerHandler('note_created', (data) => {
+        loadNotes();
+    });
+    
+    SharedWebSocket.registerHandler('note_deleted', (data) => {
+        loadNotes();
+    });
+    
+    SharedWebSocket.registerHandler('cleanup_complete', (data) => {
+        loadNotes();
+    });
 }
 
-function handleWebSocketMessage(data) {
-  switch(data.type) {
-    case 'all_notes':
-      allNotes = data.notes || [];
-      applyCurrentFilter();
-      renderNotes();
-      break;
-    case 'note_updated':
-    case 'note_created':
-    case 'note_deleted':
-    case 'cleanup_complete':
-      loadNotes();
-      break;
-  }
-}
+// handleWebSocketMessage function removed - now using SharedWebSocket handlers
 
 function setupEventListeners() {
   menuBtn.onclick = () => { sideMenu.classList.add("open"); overlay.classList.add("show"); };

@@ -87,6 +87,9 @@
   </div>
 </div>
 
+<!-- Load shared WebSocket client -->
+<script src="shared-websocket.js"></script>
+
 <script>
 /* ---------- Settings ---------- */
 const Settings = { 
@@ -244,60 +247,43 @@ clearChatHistoryBtn.onclick = () => {
 };
 
 function sendToWorker(messageObject) {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage(JSON.stringify(messageObject));
-    } else {
-        console.error("Service worker not in control. Cannot send message.");
-    }
+    SharedWebSocket.send(messageObject);
 }
 
 function initializeServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./service-worker.js').then(reg => {
-            console.log('Service Worker registered.', reg);
-            if (navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
-            }
-        }).catch(err => {
-            console.error('Service Worker registration failed:', err);
-        });
-
-        navigator.serviceWorker.addEventListener('message', event => {
-            try {
-                const msg = JSON.parse(event.data);
-                console.log("DEBUG: Received message:", msg.type, msg);
-
-                switch (msg.type) {
-                    case 'ws_open':
-                        updateConnectionStatus(true);
-                        return;
-                    case 'ws_close':
-                        updateConnectionStatus(false);
-                        return;
-                    case 'ws_error':
-                        updateConnectionStatus(false);
-                        return;
-                    case 'debug_notes':
-                        notesDisplay.textContent = msg.notes;
-                        notesDisplay.style.display = "block";
-                        break;
-                    case 'debug_cleared':
-                        notesDisplay.style.display = "none";
-                        showNotes.textContent = "Show Notes (Debug)";
-                        break;
-                    case 'auto_confirm_status':
-                        GlobalAutoConfirm.enabled = msg.enabled;
-                        Settings.autoConfirm = msg.enabled;
-                        GlobalAutoConfirm.updateUI();
-                        break;
-                }
-            } catch (error) {
-                console.log("DEBUG: Received non-JSON message:", event.data, error);
-            }
-        });
-    } else {
-        alert('Service Workers are not supported in this browser.');
-    }
+    // Use shared WebSocket instead of direct service worker communication
+    SharedWebSocket.registerHandler('ws_open', () => {
+        updateConnectionStatus(true);
+    });
+    
+    SharedWebSocket.registerHandler('ws_close', () => {
+        updateConnectionStatus(false);
+    });
+    
+    SharedWebSocket.registerHandler('ws_error', () => {
+        updateConnectionStatus(false);
+    });
+    
+    SharedWebSocket.registerHandler('debug_notes', (data) => {
+        const notesDisplay = document.getElementById("notesDisplay");
+        if (notesDisplay) {
+            notesDisplay.textContent = data.notes;
+            notesDisplay.style.display = "block";
+        }
+    });
+    
+    SharedWebSocket.registerHandler('debug_cleared', (data) => {
+        const notesDisplay = document.getElementById("notesDisplay");
+        const showNotes = document.getElementById("showNotes");
+        if (notesDisplay) notesDisplay.style.display = "none";
+        if (showNotes) showNotes.textContent = "Show Notes (Debug)";
+    });
+    
+    SharedWebSocket.registerHandler('auto_confirm_status', (data) => {
+        GlobalAutoConfirm.enabled = data.enabled;
+        Settings.autoConfirm = data.enabled;
+        GlobalAutoConfirm.updateUI();
+    });
 }
 
 function updateConnectionStatus(connected) {

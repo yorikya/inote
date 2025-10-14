@@ -96,6 +96,9 @@
   </div>
 </div>
 
+<!-- Load shared WebSocket client -->
+<script src="shared-websocket.js"></script>
+
 <script>
 /* ---------- Settings ---------- */
 const Settings = { 
@@ -169,7 +172,7 @@ function updateConnectionStatus(connected) {
 }
 
 function loadAvailableCommands() {
-  sendToWorker({type: 'get_commands'});
+  SharedWebSocket.send({type: 'get_commands'});
 }
 
 function generateDynamicCommands() {
@@ -290,89 +293,80 @@ settingsButton.onclick = () => navigateToPage('settings.html');
 
 /* ---------- Service Worker and WebSocket Logic ---------- */
 function sendToWorker(messageObject) {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage(JSON.stringify(messageObject));
-    } else {
-        console.error("Service worker not in control. Cannot send message.");
-        addMsg("Connection not ready. Please wait...", "sys");
-    }
+    SharedWebSocket.send(messageObject);
 }
 
 function initializeServiceWorker() {
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./service-worker.js').then(reg => {
-            console.log('Service Worker registered.', reg);
-            if (navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
-            }
-        }).catch(err => {
-            console.error('Service Worker registration failed:', err);
-        });
-
-        navigator.serviceWorker.addEventListener('message', event => {
-            try {
-                const msg = JSON.parse(event.data);
-                console.log("DEBUG: Received message:", msg.type, msg);
-
-                switch (msg.type) {
-                    case 'ws_open':
-                        updateConnectionStatus(true);
-                        loadAvailableCommands();
-                        handleUrlParameters();
-                        const savedNoteId = localStorage.getItem('currentNoteId');
-                        if (savedNoteId) sendToWorker({ type: 'restore_context', noteId: savedNoteId });
-                        return;
-                    case 'ws_close':
-                        updateConnectionStatus(false);
-                        return;
-                    case 'ws_error':
-                        updateConnectionStatus(false);
-                        addMsg("Connection error.", "sys");
-                        return;
-                }
-
-                // Original onmessage logic
-                if(msg.type==='reply') {
-                  const idMatch = msg.text.match(/\(ID: (\d+)\)/);
-                  if (idMatch && idMatch[1]) {
-                    currentNoteId = idMatch[1];
-                    localStorage.setItem('currentNoteId', currentNoteId);
-                  }
-                  if ([ 'No parent note selected', 'No notes have been found', 'cleared successfully', 'Returned to main menu' ].some(m => msg.text.includes(m))) {
-                    currentNoteId = null;
-                    localStorage.removeItem('currentNoteId');
-                  }
-                  if (![
-                    'Note created successfully',
-                    'Note updated successfully',
-                    'Note deleted successfully',
-                    'נוצר בהצלחה',
-                    'עודכן בהצלחה',
-                    'נמחק בהצלחה'
-                  ].some(sysMsg => msg.text.includes(sysMsg))) {
-                    addMsg(msg.text,'bot');
-                    updateModeFromMessage(msg.text);
-                    if (useTTS.checked) speakText(msg.text);
-                  }
-                }
-                else if(msg.type==='request_image_upload') { showUploadModal(msg.data.noteId); }
-                else if(msg.type==='trigger_image_upload') { currentNoteId = msg.noteId; localStorage.setItem('currentNoteId', currentNoteId); showUploadModal(msg.noteId); }
-                else if(msg.type==='available_commands') { availableCommands = msg.commands || []; commandsLoaded = true; }
-                else if(msg.type==='found_notes' && (!msg.notes || msg.notes.length === 0)) { addMsg('No notes found', 'bot'); }
-                else if(msg.type==='thinking') { showThinkingIndicator(); }
-                else if(msg.type==='thinking_done') { hideThinkingIndicator(); }
-                else if (msg.type !== 'ws_open' && msg.type !== 'ws_close') {
-                  console.log("DEBUG: Unhandled message type:", msg.type);
-                  addMsg(event.data,'sys');
-                }
-            } catch (error) {
-                console.log("DEBUG: Received non-JSON message:", event.data, error);
-                addMsg(event.data, 'bot');
-            }
-        });
-    } else {
-        alert('Service Workers are not supported in this browser.');
-    }
+    // Use shared WebSocket instead of direct service worker communication
+    SharedWebSocket.registerHandler('ws_open', (data) => {
+        updateConnectionStatus(true);
+        loadAvailableCommands();
+        handleUrlParameters();
+        const savedNoteId = localStorage.getItem('currentNoteId');
+        if (savedNoteId) SharedWebSocket.send({ type: 'restore_context', noteId: savedNoteId });
+    });
+    
+    SharedWebSocket.registerHandler('ws_close', (data) => {
+        updateConnectionStatus(false);
+    });
+    
+    SharedWebSocket.registerHandler('ws_error', (data) => {
+        updateConnectionStatus(false);
+        addMsg("Connection error.", "sys");
+    });
+    
+    SharedWebSocket.registerHandler('reply', (data) => {
+        const idMatch = data.text.match(/\(ID: (\d+)\)/);
+        if (idMatch && idMatch[1]) {
+            currentNoteId = idMatch[1];
+            localStorage.setItem('currentNoteId', currentNoteId);
+        }
+        if ([ 'No parent note selected', 'No notes have been found', 'cleared successfully', 'Returned to main menu' ].some(m => data.text.includes(m))) {
+            currentNoteId = null;
+            localStorage.removeItem('currentNoteId');
+        }
+        if (![
+            'Note created successfully',
+            'Note updated successfully',
+            'Note deleted successfully',
+            'נוצר בהצלחה',
+            'עודכן בהצלחה',
+            'נמחק בהצלחה'
+        ].some(sysMsg => data.text.includes(sysMsg))) {
+            addMsg(data.text,'bot');
+            updateModeFromMessage(data.text);
+            if (useTTS.checked) speakText(data.text);
+        }
+    });
+    
+    SharedWebSocket.registerHandler('request_image_upload', (data) => {
+        showUploadModal(data.data.noteId);
+    });
+    
+    SharedWebSocket.registerHandler('trigger_image_upload', (data) => {
+        currentNoteId = data.noteId;
+        localStorage.setItem('currentNoteId', currentNoteId);
+        showUploadModal(data.noteId);
+    });
+    
+    SharedWebSocket.registerHandler('available_commands', (data) => {
+        availableCommands = data.commands || [];
+        commandsLoaded = true;
+    });
+    
+    SharedWebSocket.registerHandler('found_notes', (data) => {
+        if (!data.notes || data.notes.length === 0) {
+            addMsg('No notes found', 'bot');
+        }
+    });
+    
+    SharedWebSocket.registerHandler('thinking', (data) => {
+        showThinkingIndicator();
+    });
+    
+    SharedWebSocket.registerHandler('thinking_done', (data) => {
+        hideThinkingIndicator();
+    });
 }
 
 /* ---------- Chat flow ---------- */
@@ -383,7 +377,7 @@ formEl.addEventListener("submit", async (e) => {
   addMsg(text, "you");
   if (isCommand(text)) addToCommandHistory(text);
   inputEl.value = "";
-  sendToWorker({ type: 'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm });
+  SharedWebSocket.send({ type: 'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm });
   scrollToBottom();
 });
 
@@ -448,7 +442,7 @@ function handleUrlParameters() {
   const findbyid = new URLSearchParams(window.location.search).get('findbyid');
   if (findbyid) {
     addMsg(`Auto-finding note ID: ${findbyid}`, 'sys');
-    sendToWorker({ type: 'chat', text: `/findbyid ${findbyid}`, lang: Settings.lang, autoConfirm: true });
+    SharedWebSocket.send({ type: 'chat', text: `/findbyid ${findbyid}`, lang: Settings.lang, autoConfirm: true });
   }
 }
 
@@ -562,7 +556,7 @@ function uploadImages() {
   addMsg(`📤 Uploading ${selectedFiles.length} image(s)...`, "sys");
   selectedFiles.forEach(file => {
     resizeAndCompressImage(file, (base64) => {
-      sendToWorker({ type: 'image_upload', noteId: currentNoteId, imageName: file.name, imageData: base64 });
+      SharedWebSocket.send({ type: 'image_upload', noteId: currentNoteId, imageName: file.name, imageData: base64 });
     });
   });
   closeUploadModal();
