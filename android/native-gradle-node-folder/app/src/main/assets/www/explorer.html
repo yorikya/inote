@@ -7,243 +7,69 @@
 <link rel="stylesheet" href="common.css">
 <link rel="stylesheet" href="explorer.css">
 <style>
-  /* Override any conflicting styles and ensure side menu works properly */
-  body {
-    margin: 0;
-    font-family: system-ui, Arial, sans-serif;
-    background: #0b0d10;
-    color: #e6e6e6;
-    overflow-x: hidden;
-  }
-
-  /* Side Menu - Fixed positioning on LEFT side */
-  .side-menu {
-    position: fixed !important;
-    top: 0 !important;
-    left: -300px !important;  /* Changed from right to left */
-    width: 300px !important;
-    height: 100vh !important;
-    background: #1e1e1e !important;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5) !important;  /* Changed shadow direction */
-    transition: left 0.3s ease !important;  /* Changed from right to left */
-    z-index: 1001 !important;
-    overflow-y: auto !important;
-  }
-
-  .side-menu.open {
-    left: 0 !important;  /* Changed from right to left */
-  }
-
-  .side-menu-header {
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    padding: 20px !important;
-    border-bottom: 1px solid #333 !important;
-  }
-
-  .side-menu-header h2 {
-    margin: 0 !important;
-    font-size: 20px !important;
-    color: #fff !important;
-  }
-
-  .side-menu-header button {
-    background: none !important;
-    border: none !important;
-    color: #fff !important;
-    font-size: 24px !important;
-    cursor: pointer !important;
-    padding: 0 !important;
-    width: 30px !important;
-    height: 30px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-
-  .side-menu-content {
-    padding: 20px !important;
-  }
-
-  .side-menu-content h3 {
-    margin: 0 0 10px 0 !important;
-    font-size: 16px !important;
-    color: #fff !important;
-  }
-
-  /* Overlay */
-  .overlay {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    background: rgba(0, 0, 0, 0.5) !important;
-    z-index: 1000 !important;
-    display: none !important;
-  }
-
-  .overlay.show {
-    display: block !important;
-  }
-
-  /* Navigation buttons */
-  .nav-button {
-    width: 100% !important;
-    padding: 12px 16px !important;
-    margin-bottom: 8px !important;
-    background: #2a2f36 !important;
-    color: #e6e6e6 !important;
-    border: 1px solid #444 !important;
-    border-radius: 8px !important;
-    cursor: pointer !important;
-    font-size: 16px !important;
-    text-align: left !important;
-    transition: all 0.2s ease !important;
-  }
-
-  .nav-button:hover {
-    background: #1f6feb !important;
-    border-color: #1f6feb !important;
-  }
-
-  .nav-button.active {
-    background: #1f6feb !important;
-    border-color: #1f6feb !important;
-  }
-
-  .nav-button.secondary {
-    background: #2a2f36 !important;
-  }
-
-  .edit-note-images {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  .edit-note-image-item {
-    position: relative;
-    width: 100px;
-    height: 100px;
-  }
-
-  .edit-note-image-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 4px;
-  }
-
-  .edit-note-image-item .delete-btn {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    font-size: 14px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  body { margin: 0; font-family: system-ui, Arial, sans-serif; background: #0b0d10; color: #e6e6e6; overflow-x: hidden; }
+  .side-menu { position: fixed !important; top: 0 !important; left: -300px !important; width: 300px !important; height: 100vh !important; background: #1e1e1e !important; box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5) !important; transition: left 0.3s ease !important; z-index: 1001 !important; overflow-y: auto !important; }
+  .side-menu.open { left: 0 !important; }
+  .side-menu-header { display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 20px !important; border-bottom: 1px solid #333 !important; }
+  .side-menu-header h2 { margin: 0 !important; font-size: 20px !important; color: #fff !important; }
+  .side-menu-header button { background: none !important; border: none !important; color: #fff !important; font-size: 24px !important; cursor: pointer !important; padding: 0 !important; width: 30px !important; height: 30px !important; display: flex !important; align-items: center !important; justify-content: center !important; }
+  .side-menu-content { padding: 20px !important; }
+  .side-menu-content h3 { margin: 0 0 10px 0 !important; font-size: 16px !important; color: #fff !important; }
+  .overlay { position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.5) !important; z-index: 1000 !important; display: none !important; }
+  .overlay.show { display: block !important; }
+  .nav-button { width: 100% !important; padding: 12px 16px !important; margin-bottom: 8px !important; background: #2a2f36 !important; color: #e6e6e6 !important; border: 1px solid #444 !important; border-radius: 8px !important; cursor: pointer !important; font-size: 16px !important; text-align: left !important; transition: all 0.2s ease !important; }
+  .nav-button:hover { background: #1f6feb !important; border-color: #1f6feb !important; }
+  .nav-button.active { background: #1f6feb !important; border-color: #1f6feb !important; }
+  .edit-note-images { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .edit-note-image-item { position: relative; width: 100px; height: 100px; }
+  .edit-note-image-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+  .edit-note-image-item .delete-btn { position: absolute; top: 5px; right: 5px; background: rgba(0, 0, 0, 0.7); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .edit-menu { position: fixed; background: #2a2f36; border: 1px solid #444; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 2000; padding: 8px 0; width: max-content; }
+  .edit-menu-item { padding: 10px 16px; color: #e6e6e6; cursor: pointer; font-size: 14px; white-space: nowrap; }
+  .edit-menu-item:hover { background: #1f6feb; }
+  .edit-menu-item.danger:hover { background: #d93025; }
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- Header -->
   <header>
     <button id="menuBtn">☰</button>
     <h1>📝 Note Explorer</h1>
     <div class="spacer"></div>
     <button id="refreshBtn">🔄 Refresh</button>
   </header>
-  
-  <!-- Search Bar -->
   <div class="search-container">
     <input type="text" id="searchInput" class="search-bar" placeholder="Search notes...">
   </div>
-  
-  <!-- Notes Container -->
   <div class="notes-container">
     <div id="loadingState" class="loading" style="display:none;">Loading notes...</div>
-    <div id="emptyState" class="empty-state" style="display:none;">
-      <h3>No notes found</h3>
-      <p>Create your first note using the Chat interface</p>
-    </div>
+    <div id="emptyState" class="empty-state" style="display:none;"><h3>No notes found</h3><p>Create one in the Chat interface</p></div>
     <div id="notesGrid" class="notes-grid"></div>
   </div>
-  
-  <!-- Edit Note Modal -->
   <div id="editModal" class="modal">
     <div class="modal-content">
-      <div class="modal-header">
-        <h3 class="modal-title">✏️ Edit Note</h3>
-        <button class="modal-close" onclick="closeEditModal()">&times;</button>
-      </div>
+      <div class="modal-header"><h3 class="modal-title">✏️ Edit Note</h3><button class="modal-close" onclick="closeEditModal()">&times;</button></div>
       <div class="modal-body">
-        <!-- Note ID (read-only) -->
-        <div>
-          <label>Note ID</label>
-          <input type="text" id="editNoteId" readonly disabled>
-        </div>
-        
-        <!-- Title -->
-        <div>
-          <label>Title *</label>
-          <input type="text" id="editNoteTitle" placeholder="Enter note title" required>
-        </div>
-        
-        <!-- Description -->
-        <div>
-          <label>Description</label>
-          <textarea id="editNoteDescription" rows="6" placeholder="Enter note description"></textarea>
-        </div>
-
-        <!-- Images -->
-        <div>
-          <label>Images</label>
-          <div id="editNoteImages" class="edit-note-images"></div>
-        </div>
-        
-        <!-- Status -->
-        <div>
-          <label style="display: flex; align-items: center; cursor: pointer; user-select: none;">
-            <input type="checkbox" id="editNoteDone">
-            <span>Mark as completed</span>
-          </label>
-        </div>
-        
-        <!-- Action Buttons -->
-        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
-          <button onclick="closeEditModal()">❌ Cancel</button>
-          <button onclick="saveNoteChanges()">💾 Save Changes</button>
-        </div>
+        <div><label>Note ID</label><input type="text" id="editNoteId" readonly disabled></div>
+        <div><label>Title *</label><input type="text" id="editNoteTitle" placeholder="Enter note title" required></div>
+        <div><label>Description</label><textarea id="editNoteDescription" rows="6" placeholder="Enter note description"></textarea></div>
+        <div><label>Images</label><div id="editNoteImages" class="edit-note-images"></div></div>
+        <div><label style="display: flex; align-items: center;"><input type="checkbox" id="editNoteDone"><span>Mark as completed</span></label></div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;"><button onclick="closeEditModal()">❌ Cancel</button><button onclick="saveNoteChanges()">💾 Save</button></div>
       </div>
     </div>
   </div>
 </div>
-
-<!-- Side Menu -->
 <div class="overlay" id="overlay"></div>
 <div class="side-menu" id="sideMenu">
-  <div class="side-menu-header">
-    <h2>Menu</h2>
-    <button id="closeMenu">✕</button>
-  </div>
+  <div class="side-menu-header"><h2>Menu</h2><button id="closeMenu">✕</button></div>
   <div class="side-menu-content">
     <h3>Navigation</h3>
     <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
-      <button id="chatButton" class="nav-button">💬 Chat</button>
+      <button id="chatButton" class="nav-button secondary">💬 Chat</button>
       <button id="explorerButton" class="nav-button active">📝 Note Explorer</button>
+      <button id="settingsButton" class="nav-button secondary">⚙️ Settings</button>
     </div>
-    
     <h3>Filter Options</h3>
     <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
       <button id="showAllBtn" class="nav-button">📋 All Notes</button>
@@ -254,7 +80,6 @@
 </div>
 
 <script>
-// Elements
 const menuBtn = document.getElementById("menuBtn");
 const sideMenu = document.getElementById("sideMenu");
 const overlay = document.getElementById("overlay");
@@ -264,1196 +89,272 @@ const refreshBtn = document.getElementById("refreshBtn");
 const notesGrid = document.getElementById("notesGrid");
 const loadingState = document.getElementById("loadingState");
 const emptyState = document.getElementById("emptyState");
-
-// Navigation elements
 const chatButton = document.getElementById("chatButton");
 const explorerButton = document.getElementById("explorerButton");
-
-// Filter elements
+const settingsButton = document.getElementById("settingsButton");
 const showAllBtn = document.getElementById("showAllBtn");
 const showCompletedBtn = document.getElementById("showCompletedBtn");
 const showPendingBtn = document.getElementById("showPendingBtn");
-
-// Edit modal elements
 const editModal = document.getElementById("editModal");
-const editNoteId = document.getElementById("editNoteId");
-const editNoteTitle = document.getElementById("editNoteTitle");
-const editNoteDescription = document.getElementById("editNoteDescription");
-const editNoteDone = document.getElementById("editNoteDone");
 const editNoteImages = document.getElementById("editNoteImages");
 
-// State
-let allNotes = [];
-let filteredNotes = [];
-let currentFilter = 'all';
-let noteImageStates = {}; // Track current image index for each note
-let imageRotationIntervals = {}; // Track auto-rotation intervals
-let currentEditingNoteId = null;
+let allNotes = [], filteredNotes = [], currentFilter = 'all', noteImageStates = {}, imageRotationIntervals = {};
 
-// WebSocket connection
-let ws = null;
-
-// ========== IMAGE ROTATION FUNCTIONS (GLOBAL SCOPE) ==========
-
-// Initialize image state for a note
-function initializeNoteImageState(noteId, imageCount) {
-  console.log(`[ImageRotation] Initializing state for note ${noteId}, imageCount: ${imageCount}`);
-  if (!noteImageStates[noteId]) {
-    noteImageStates[noteId] = {
-      currentIndex: 0,
-      totalImages: imageCount
-    };
-    console.log(`[ImageRotation] Created new state for note ${noteId}:`, noteImageStates[noteId]);
-  } else {
-    console.log(`[ImageRotation] State already exists for note ${noteId}:`, noteImageStates[noteId]);
-  }
+function sendToWorker(msg) {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage(JSON.stringify(msg));
+    } else {
+        console.error("Service worker not ready");
+    }
 }
 
-// Manual image rotation (via arrow buttons) - MUST BE GLOBAL
-window.rotateImage = function(noteId, direction) {
-  console.log(`[ImageRotation] rotateImage called - noteId: ${noteId}, direction: ${direction}`);
-  
+function showEditMenu(noteId, event) {
+  event.stopPropagation();
+  event.preventDefault();
+  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
+  const note = allNotes.find(n => String(n.id) === String(noteId));
+  if (!note) return;
+  const menu = document.createElement('div');
+  menu.className = 'edit-menu';
+  const items = [
+    { text: '✏️ Edit Note', action: () => openEditModal(noteId) },
+    { text: '💬 Open In Chat', action: () => window.location.href = `index.html?findbyid=${noteId}` },
+    { text: note.done ? '⏳ Mark as Pending' : '✅ Mark as Done', action: () => toggleNoteDone(noteId) },
+    { text: '🗑️ Delete Note', action: () => deleteNote(noteId), danger: true }
+  ];
+  items.forEach(item => {
+    const menuItem = document.createElement('div');
+    menuItem.className = 'edit-menu-item';
+    if (item.danger) menuItem.classList.add('danger');
+    menuItem.innerHTML = item.text;
+    menuItem.onclick = (e) => { e.stopPropagation(); item.action(); menu.remove(); };
+    menu.appendChild(menuItem);
+  });
+  menu.style.position = 'fixed';
+  menu.style.top = `${event.clientY}px`;
+  menu.style.left = `${event.clientX}px`;
+  document.body.appendChild(menu);
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenuHandler(e) {
+      if (!menu.contains(e.target)) menu.remove();
+    }, { once: true });
+  }, 0);
+}
+
+window.rotateImage = function(noteId, dir) {
   const note = allNotes.find(n => n.id === noteId);
-  if (!note) {
-    console.error(`[ImageRotation] Note not found: ${noteId}`);
-    return;
-  }
-  
-  if (!note.images || note.images.length <= 1) {
-    console.log(`[ImageRotation] Note ${noteId} has ${note.images ? note.images.length : 0} images, rotation not needed`);
-    return;
-  }
-  
-  console.log(`[ImageRotation] Note ${noteId} has ${note.images.length} images`);
-  
-  // Initialize state if needed
-  initializeNoteImageState(noteId, note.images.length);
-  
-  // Update index
+  if (!note || !note.images || note.images.length <= 1) return;
+  if (!noteImageStates[noteId]) noteImageStates[noteId] = { currentIndex: 0, totalImages: note.images.length };
   const state = noteImageStates[noteId];
-  const oldIndex = state.currentIndex;
-  state.currentIndex = (state.currentIndex + direction + state.totalImages) % state.totalImages;
-  
-  console.log(`[ImageRotation] Index changed from ${oldIndex} to ${state.currentIndex}`);
-  console.log(`[ImageRotation] New image path: ${note.images[state.currentIndex]}`);
-  
-  // Update the image display
+  state.currentIndex = (state.currentIndex + dir + state.totalImages) % state.totalImages;
   updateNoteImage(noteId, note.images[state.currentIndex], state.currentIndex);
 };
 
-// Auto-rotate images for a note
-function startImageRotation(noteId) {
-  console.log(`[ImageRotation] Starting auto-rotation for note ${noteId}`);
-  
-  const note = allNotes.find(n => n.id === noteId);
-  if (!note) {
-    console.error(`[ImageRotation] Cannot start rotation - note not found: ${noteId}`);
-    return;
-  }
-  
-  if (!note.images || note.images.length <= 1) {
-    console.log(`[ImageRotation] Note ${noteId} has ${note.images ? note.images.length : 0} images, auto-rotation not needed`);
-    return;
-  }
-  
-  console.log(`[ImageRotation] Note ${noteId} has ${note.images.length} images, starting auto-rotation`);
-  
-  // Clear any existing interval
-  if (imageRotationIntervals[noteId]) {
-    console.log(`[ImageRotation] Clearing existing interval for note ${noteId}`);
-    clearInterval(imageRotationIntervals[noteId]);
-  }
-  
-  // Initialize state
-  initializeNoteImageState(noteId, note.images.length);
-  
-  // Start rotation (every 3 seconds)
-  imageRotationIntervals[noteId] = setInterval(() => {
-    console.log(`[ImageRotation] Auto-rotating note ${noteId}`);
-    window.rotateImage(noteId, 1);
-  }, 3000);
-  
-  console.log(`[ImageRotation] Auto-rotation interval set for note ${noteId}, interval ID:`, imageRotationIntervals[noteId]);
-}
-
-// Stop image rotation for a note
-function stopImageRotation(noteId) {
-  console.log(`[ImageRotation] Stopping rotation for note ${noteId}`);
-  if (imageRotationIntervals[noteId]) {
-    clearInterval(imageRotationIntervals[noteId]);
-    delete imageRotationIntervals[noteId];
-    console.log(`[ImageRotation] Rotation stopped for note ${noteId}`);
-  } else {
-    console.log(`[ImageRotation] No active rotation found for note ${noteId}`);
-  }
-}
-
-// Update note image display
-function updateNoteImage(noteId, imagePath, currentIndex) {
-  console.log(`[ImageRotation] Updating image for note ${noteId}, index: ${currentIndex}, path: ${imagePath}`);
-  
-  const imgElement = document.getElementById(`note-img-${noteId}`);
-  const counterElement = document.querySelector(`[data-note-id="${noteId}"] .image-counter`);
-  
-  if (!imgElement) {
-    console.error(`[ImageRotation] Image element not found: note-img-${noteId}`);
-    return;
-  }
-  
-  console.log(`[ImageRotation] Found image element for note ${noteId}`);
-  
-  const displayPath = convertImagePathForDisplay(imagePath);
-  console.log(`[ImageRotation] Display path: ${displayPath}`);
-  
-  if (displayPath) {
-    imgElement.src = displayPath;
-    console.log(`[ImageRotation] Image src updated to: ${displayPath}`);
-    
-    // Update content-uri and image-path attributes if needed
-    if (imagePath.startsWith('content://')) {
-      imgElement.setAttribute('data-content-uri', imagePath);
-      console.log(`[ImageRotation] Set content-uri attribute`);
-    } else if (imagePath.startsWith('/storage/') || imagePath.startsWith('/sdcard/')) {
-      imgElement.setAttribute('data-image-path', imagePath);
-      console.log(`[ImageRotation] Set image-path attribute`);
-    }
-  } else {
-    console.error(`[ImageRotation] No display path available for: ${imagePath}`);
-  }
-  
-  // Update counter
-  if (counterElement) {
+function updateNoteImage(noteId, imagePath, idx) {
+  const imgEl = document.getElementById(`note-img-${noteId}`);
+  const counterEl = document.querySelector(`[data-note-id="${noteId}"] .image-counter`);
+  if (imgEl) imgEl.src = convertImagePathForDisplay(imagePath);
+  if (counterEl) {
     const note = allNotes.find(n => n.id === noteId);
-    if (note && note.images) {
-      const counterText = `${currentIndex + 1} / ${note.images.length}`;
-      counterElement.textContent = counterText;
-      console.log(`[ImageRotation] Counter updated to: ${counterText}`);
-    }
-  } else {
-    console.warn(`[ImageRotation] Counter element not found for note ${noteId}`);
+    if (note && note.images) counterEl.textContent = `${idx + 1} / ${note.images.length}`;
   }
 }
 
-// Start auto-rotation for all notes with multiple images
-function startAllImageRotations() {
-  console.log(`[ImageRotation] Starting auto-rotation for all notes`);
-  console.log(`[ImageRotation] Total filtered notes: ${filteredNotes.length}`);
-  
-  // Clear all existing intervals
-  Object.keys(imageRotationIntervals).forEach(noteId => {
-    console.log(`[ImageRotation] Clearing existing interval for note ${noteId}`);
-    stopImageRotation(noteId);
-  });
-  
-  // Count notes with multiple images
-  let multiImageCount = 0;
-  
-  // Start rotation for notes with multiple images
-  filteredNotes.forEach(note => {
-    if (note.images && note.images.length > 1) {
-      multiImageCount++;
-      console.log(`[ImageRotation] Note ${note.id} has ${note.images.length} images - starting rotation`);
-      startImageRotation(note.id);
-    } else {
-      console.log(`[ImageRotation] Note ${note.id} has ${note.images ? note.images.length : 0} images - skipping rotation`);
-    }
-  });
-  
-  console.log(`[ImageRotation] Started auto-rotation for ${multiImageCount} notes with multiple images`);
-  console.log(`[ImageRotation] Active intervals:`, Object.keys(imageRotationIntervals));
-}
-
-// Stop all image rotations
-function stopAllImageRotations() {
-  console.log(`[ImageRotation] Stopping all image rotations`);
-  const intervalCount = Object.keys(imageRotationIntervals).length;
-  Object.keys(imageRotationIntervals).forEach(noteId => {
-    stopImageRotation(noteId);
-  });
-  console.log(`[ImageRotation] Stopped ${intervalCount} rotation intervals`);
-}
-
-// ========== END IMAGE ROTATION FUNCTIONS ==========
-
-// ========== EDIT NOTE FUNCTIONS ==========
-
-// Open edit modal
 function openEditModal(noteId) {
-  console.log('[Edit] Opening edit modal for note:', noteId);
-  
-  // Find the note - convert noteId to number if needed
   const note = allNotes.find(n => String(n.id) === String(noteId));
-  
-  if (!note) {
-    console.error('[Edit] Note not found:', noteId);
-    console.log('[Edit] Available notes:', allNotes.map(n => n.id));
-    alert('Note not found. Please refresh and try again.');
-    return;
-  }
-  
-  console.log('[Edit] Found note:', note);
-  
-  // Populate the form
+  if (!note) return alert('Note not found.');
   document.getElementById('editNoteId').value = note.id;
   document.getElementById('editNoteTitle').value = note.title || '';
   document.getElementById('editNoteDescription').value = note.description || '';
-  document.getElementById('editNoteDone').checked = note.done === true;
-
-  // Populate images
+  document.getElementById('editNoteDone').checked = note.done;
   editNoteImages.innerHTML = '';
-  if (note.images && note.images.length > 0) {
-    note.images.forEach(imagePath => {
-      const imgContainer = document.createElement('div');
-      imgContainer.className = 'edit-note-image-item';
-
-      const img = document.createElement('img');
-      img.src = convertImagePathForDisplay(imagePath);
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'delete-btn';
-      deleteBtn.innerHTML = '&times;';
-      deleteBtn.onclick = () => deleteNoteImage(note.id, imagePath, imgContainer);
-
-      imgContainer.appendChild(img);
-      imgContainer.appendChild(deleteBtn);
-      editNoteImages.appendChild(imgContainer);
+  if (note.images) {
+    note.images.forEach(path => {
+      const c = document.createElement('div'); c.className = 'edit-note-image-item';
+      const i = document.createElement('img'); i.src = convertImagePathForDisplay(path);
+      const d = document.createElement('button'); d.className = 'delete-btn'; d.innerHTML = '&times;';
+      d.onclick = () => deleteNoteImage(note.id, path, c);
+      c.appendChild(i); c.appendChild(d); editNoteImages.appendChild(c);
     });
   }
-  
-  // Show the modal
-  const modal = document.getElementById('editModal');
-  modal.classList.add('show');
-  
-  // Close any open menus
-  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
+  editModal.classList.add('show');
 }
 
-// Close edit modal
-function closeEditModal() {
-  const modal = document.getElementById('editModal');
-  modal.classList.remove('show');
-}
+function closeEditModal() { editModal.classList.remove('show'); }
 
-// Save note changes
 function saveNoteChanges() {
   const noteId = document.getElementById('editNoteId').value;
   const title = document.getElementById('editNoteTitle').value.trim();
-  const description = document.getElementById('editNoteDescription').value.trim();
-  const done = document.getElementById('editNoteDone').checked;
-  
-  if (!title) {
-    alert('Please enter a title for the note');
-    return;
-  }
-  
-  console.log('[Edit] Saving changes for note:', noteId);
-  console.log('[Edit] New values:', { title, description, done });
-  
-  // Send update via WebSocket
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    const message = {
-      type: 'update_note',
-      noteId: noteId,
-      updates: {
-        title: title,
-        description: description,
-        done: done
-      }
-    };
-    
-    console.log('[Edit] Sending update message:', message);
-    ws.send(JSON.stringify(message));
-    
-    // Close modal
-    closeEditModal();
-    
-    // Show feedback
-    showToast('💾 Saving changes...');
-    
-    // Refresh notes after a short delay
-    setTimeout(() => {
-      loadNotes();
-    }, 500);
-  } else {
-    console.error('[Edit] WebSocket not available');
-    alert('Cannot save changes - connection issue. Please try again.');
-  }
+  if (!title) return alert('Title is required');
+  sendToWorker({
+    type: 'update_note',
+    noteId: noteId,
+    updates: { title, description: document.getElementById('editNoteDescription').value.trim(), done: document.getElementById('editNoteDone').checked }
+  });
+  closeEditModal();
+  showToast('💾 Saving...');
 }
 
-// Delete a note image
-function deleteNoteImage(noteId, imagePath, elementToRemove) {
+function deleteNoteImage(noteId, path, el) {
   if (!confirm('Are you sure you want to delete this image?')) return;
-
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    // Set context to the note first
-    ws.send(JSON.stringify({
-      type: 'chat',
-      text: `/findbyid ${noteId}`
-    }));
-
-    // Then send the delete image command
-    setTimeout(() => {
-      ws.send(JSON.stringify({
-        type: 'chat',
-        text: `/deleteimage ${imagePath}`
-      }));
-
-      // Immediately remove the image from the view
-      if (elementToRemove) {
-        elementToRemove.remove();
-      }
-
-      // Update the local notes array
-      const note = allNotes.find(n => String(n.id) === String(noteId));
-      if (note && note.images) {
-        note.images = note.images.filter(p => p !== imagePath);
-      }
-
-      // Refresh the main notes grid in the background
-      loadNotes();
-    }, 100);
-  } else {
-    alert('Cannot delete image - connection issue. Please try again.');
-  }
+  sendToWorker({ type: 'chat', text: `/findbyid ${noteId}` });
+  setTimeout(() => {
+    sendToWorker({ type: 'chat', text: `/deleteimage ${path}` });
+    if (el) el.remove();
+    const note = allNotes.find(n => String(n.id) === String(noteId));
+    if (note && note.images) note.images = note.images.filter(p => p !== path);
+  }, 100);
 }
 
-// Toggle note done status
 function toggleNoteDone(noteId) {
-  console.log('[Toggle] Toggling done status for note:', noteId);
-  
-  // Close any open menus
-  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
-  
-  // Find the note
   const note = allNotes.find(n => String(n.id) === String(noteId));
-  
-  if (!note) {
-    console.error('[Toggle] Note not found:', noteId);
-    return;
-  }
-  
-  console.log('[Toggle] Current note state:', { id: note.id, done: note.done });
-  
-  // Send direct update_note message with proper noteId
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    const newDoneState = !note.done;
-    console.log('[Toggle] Sending update_note with noteId:', noteId, 'done:', newDoneState);
-    
-    ws.send(JSON.stringify({
-      type: 'update_note',
-      noteId: String(noteId),  // Ensure it's a string
-      updates: { done: newDoneState }
-    }));
-  } else {
-    console.error('[Toggle] WebSocket not ready');
-  }
+  if (!note) return;
+  sendToWorker({ type: 'update_note', noteId: String(noteId), updates: { done: !note.done } });
 }
 
-// Delete note
 function deleteNote(noteId) {
-  console.log('[Delete] Deleting note:', noteId);
-  
-  // Close any open menus
-  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
-  
-  // Find the note
+  if (!confirm('Are you sure you want to delete this note?')) return;
   const note = allNotes.find(n => String(n.id) === String(noteId));
-  
-  if (!note) {
-    console.error('[Delete] Note not found:', noteId);
-    return;
-  }
-  
-  // Send chat command instead of direct WebSocket message
-  // This ensures auto-confirm setting is respected
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    // First, set the context by finding the note
-    ws.send(JSON.stringify({
-      type: 'chat',
-      text: `/findbyid ${noteId}`
-    }));
-    
-    // Then send the delete command after a short delay
-    setTimeout(() => {
-      ws.send(JSON.stringify({
-        type: 'chat',
-        text: '/delete'
-      }));
-    }, 100);
-  }
+  if (!note) return;
+  sendToWorker({ type: 'chat', text: `/findbyid ${noteId}` });
+  setTimeout(() => { sendToWorker({ type: 'chat', text: '/delete' }); }, 100);
 }
 
-// ========== END EDIT NOTE FUNCTIONS ==========
-
-// Initialize
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('[Init] DOM Content Loaded');
-  initializeWebSocket();
+  initializeServiceWorker();
   setupEventListeners();
-  loadNotes();
 });
 
-// WebSocket initialization
-function initializeWebSocket() {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  // For WebSocket, use 127.0.0.1 (localhost) as 0.0.0.0 is not a valid address for connections
-  const wsUrl = `${protocol}//127.0.0.1:30000`;
-  
-  console.log('Connecting to WebSocket:', wsUrl);
-  ws = new WebSocket(wsUrl);
-  
-  ws.onopen = function() {
-    console.log('Connected to WebSocket');
-    // Request all notes
-    ws.send(JSON.stringify({ type: "get_all_notes" }));
-  };
-  
-  ws.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-    handleWebSocketMessage(data);
-  };
-  
-  ws.onclose = function() {
-    console.log('WebSocket connection closed');
-    // Try to reconnect after 3 seconds
-    setTimeout(initializeWebSocket, 3000);
-  };
-  
-  ws.onerror = function(error) {
-    console.error('WebSocket error:', error);
-  };
+function initializeServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./service-worker.js').then(reg => {
+            console.log('Service Worker registered.');
+            if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
+        }).catch(err => console.error('SW registration failed:', err));
+
+        navigator.serviceWorker.addEventListener('message', event => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'ws_open') return loadNotes();
+                handleWebSocketMessage(data);
+            } catch (e) { console.error("Error parsing SW message", e); }
+        });
+    } else { alert("Service Workers are not supported."); }
 }
 
-// Handle WebSocket messages
 function handleWebSocketMessage(data) {
   switch(data.type) {
     case 'all_notes':
-      allNotes = validateNoteImages(data.notes || []);
+      allNotes = data.notes || [];
       applyCurrentFilter();
       renderNotes();
       break;
     case 'note_updated':
-      // Refresh notes when a note is updated
-      loadNotes();
-      break;
-    case 'uri_conversion_success':
-      handleUriConversionSuccess(data);
-      break;
-    case 'uri_conversion_error':
-      break;
-    case 'image_data':
-      handleImageDataReceived(data);
-      break;
-    case 'image_url':
-      handleImageUrlReceived(data);
-      break;
-    case 'image_error':
-      handleImageError(data);
-      break;
-    case 'file_api_test_results':
-      console.log('File API Test Results:', JSON.stringify(data.results, null, 2));
-      break;
-    case 'cleanup_complete':
-      showToast('✅ Broken image link removed');
-      // Refresh the notes to show updated state
-      loadNotes();
-      break;
     case 'note_created':
-      // Refresh notes when a new note is created
-      loadNotes();
-      break;
     case 'note_deleted':
-      // Refresh notes when a note is deleted
+    case 'cleanup_complete':
       loadNotes();
       break;
   }
 }
 
-// Setup event listeners
 function setupEventListeners() {
-  console.log('[Setup] Setting up event listeners');
-  
-  // Side menu
-  menuBtn.onclick = () => {
-    console.log('[Menu] Menu button clicked');
-    sideMenu.classList.add("open");
-    overlay.classList.add("show");
-    console.log('[Menu] Side menu should be open now');
-  };
-  
-  closeMenu.onclick = () => {
-    console.log('[Menu] Close button clicked');
-    sideMenu.classList.remove("open");
-    overlay.classList.remove("show");
-  };
-  
-  overlay.onclick = () => {
-    console.log('[Menu] Overlay clicked');
-    sideMenu.classList.remove("open");
-    overlay.classList.remove("show");
-  };
-  
-  // Navigation
-  chatButton.onclick = () => {
-    console.log('[Nav] Chat button clicked');
-    window.location.href = 'index.html';
-  };
-  
-  explorerButton.onclick = () => {
-    console.log('[Nav] Explorer button clicked');
-    // Already on explorer page
-    sideMenu.classList.remove("open");
-    overlay.classList.remove("show");
-  };
-  
-  // Search
-  searchInput.addEventListener('input', function() {
-    applyCurrentFilter();
-    renderNotes();
-  });
-  
-  // Refresh
-  refreshBtn.onclick = () => {
-    loadNotes();
-  };
-  
-  // Filters
+  menuBtn.onclick = () => { sideMenu.classList.add("open"); overlay.classList.add("show"); };
+  closeMenu.onclick = () => { sideMenu.classList.remove("open"); overlay.classList.remove("show"); };
+  overlay.onclick = () => { sideMenu.classList.remove("open"); overlay.classList.remove("show"); };
+  chatButton.onclick = () => window.location.href = 'index.html';
+  explorerButton.onclick = () => { sideMenu.classList.remove("open"); overlay.classList.remove("show"); };
+  settingsButton.onclick = () => window.location.href = 'settings.html';
+  searchInput.addEventListener('input', () => { applyCurrentFilter(); renderNotes(); });
+  refreshBtn.onclick = () => loadNotes();
   showAllBtn.onclick = () => setFilter('all');
   showCompletedBtn.onclick = () => setFilter('completed');
   showPendingBtn.onclick = () => setFilter('pending');
+  notesGrid.addEventListener('click', function(e) {
+    const noteCard = e.target.closest('.note-card');
+    if (noteCard && !e.target.closest('button, a, input, .edit-menu')) {
+        const noteId = noteCard.getAttribute('data-note-id');
+        if (noteId) showEditMenu(noteId, e);
+    }
+  });
 }
 
-// Set filter
 function setFilter(filter) {
   currentFilter = filter;
-  
-  // Update button states
-  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+  [showAllBtn, showCompletedBtn, showPendingBtn].forEach(b => b.classList.remove('active'));
   if (filter === 'all') showAllBtn.classList.add('active');
   else if (filter === 'completed') showCompletedBtn.classList.add('active');
-  else if (filter === 'pending') showPendingBtn.classList.add('active');
-  
+  else showPendingBtn.classList.add('active');
   applyCurrentFilter();
   renderNotes();
 }
 
-// Apply current filter
 function applyCurrentFilter() {
-  const searchTerm = searchInput.value.toLowerCase();
-  
-  filteredNotes = allNotes.filter(note => {
-    // Search filter
-    const matchesSearch = !searchTerm || 
-      note.title.toLowerCase().includes(searchTerm) ||
-      (note.description && note.description.toLowerCase().includes(searchTerm));
-    
-    // Status filter
-    let matchesStatus = true;
-    if (currentFilter === 'completed') {
-      matchesStatus = note.done === true;
-    } else if (currentFilter === 'pending') {
-      matchesStatus = note.done !== true;
-    }
-    
-    // Don't show deleted notes
-    const notDeleted = !note.deleted;
-    
-    return matchesSearch && matchesStatus && notDeleted;
+  const term = searchInput.value.toLowerCase();
+  filteredNotes = allNotes.filter(n => {
+    const searchMatch = !term || n.title.toLowerCase().includes(term) || (n.description && n.description.toLowerCase().includes(term));
+    const statusMatch = currentFilter === 'all' || (currentFilter === 'completed' && n.done) || (currentFilter === 'pending' && !n.done);
+    return searchMatch && statusMatch && !n.deleted;
   });
-  
-  // Check for notes with images
-  const notesWithImages = filteredNotes.filter(note => note.images && note.images.length > 0);
 }
 
-// Load notes
 function loadNotes() {
   loadingState.style.display = 'block';
   emptyState.style.display = 'none';
   notesGrid.style.display = 'none';
-  
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "get_all_notes" }));
-  } else {
-    // If WebSocket is not ready, show empty state
-    setTimeout(() => {
-      loadingState.style.display = 'none';
-      emptyState.style.display = 'block';
-    }, 1000);
-  }
+  sendToWorker({ type: "get_all_notes" });
 }
 
-// Validate and clean up missing images
-        function validateNoteImages(notes) {
-          // With file path storage approach, we don't validate image existence in the web interface
-          // Images are stored as file paths and displayed as placeholders
-          return notes.map(note => {
-            return note;
-          });
-        }
-
-// Render notes (updated to start auto-rotation)
 function renderNotes() {
-  console.log('[Render] Starting to render notes');
-  console.log('[Render] Filtered notes count:', filteredNotes.length);
-  
   loadingState.style.display = 'none';
-  
   if (filteredNotes.length === 0) {
-    console.log('[Render] No notes to display');
     emptyState.style.display = 'block';
     notesGrid.style.display = 'none';
-    stopAllImageRotations();
     return;
   }
-  
   emptyState.style.display = 'none';
   notesGrid.style.display = 'grid';
-  
-  // Sort notes by creation date (newest first)
-  const sortedNotes = [...filteredNotes].sort((a, b) => {
-    const dateA = new Date(a.creation_date || 0);
-    const dateB = new Date(b.creation_date || 0);
-    return dateB - dateA;
-  });
-  
-  console.log('[Render] Sorted notes:', sortedNotes.length);
-  
-  notesGrid.innerHTML = sortedNotes.map(note => createNoteCard(note)).join('');
-  console.log('[Render] Note cards created and inserted into DOM');
-  
-  // Start auto-rotation for notes with multiple images
-  setTimeout(() => {
-    console.log('[Render] Starting auto-rotation after 500ms delay');
-    startAllImageRotations();
-  }, 500); // Small delay to ensure DOM is ready
+  const sorted = [...filteredNotes].sort((a, b) => (new Date(b.creation_date || 0)) - (new Date(a.creation_date || 0)));
+  notesGrid.innerHTML = sorted.map(createNoteCard).join('');
 }
 
-// Create note card HTML (updated with better logging)
 function createNoteCard(note) {
-  const isCompleted = note.done === true;
-  const isParent = !note.parent_id;
-  const hasSubNotes = note.subNotes && note.subNotes.length > 0;
-  const subNotesCount = hasSubNotes ? note.subNotes.length : 0;
-  const hasImages = note.images && note.images.length > 0;
-  const imageCount = hasImages ? note.images.length : 0;
-  
-  console.log(`[CreateCard] Creating card for note ${note.id}, images: ${imageCount}`);
-  
-  const statusText = isCompleted ? 'Completed' : 'Pending';
-  const statusClass = isCompleted ? 'completed' : 'pending';
-  
-  const createdAt = note.creation_date ? new Date(note.creation_date).toLocaleDateString() : 'Unknown';
-  
-  // Generate image preview HTML
-  let imagePreviewHtml = '';
-  if (hasImages) {
-    const firstImage = note.images[0];
-    const displayPath = convertImagePathForDisplay(firstImage);
-    
-    if (displayPath) {
-      const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
-      const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
-        `data-image-path="${firstImage}"` : '';
-      
-      if (imageCount === 1) {
-        imagePreviewHtml = `
-          <div class="note-images" data-note-id="${note.id}">
-            <div class="image-preview-container">
-              <img class="image-preview-img" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
-                   onerror="this.parentElement.innerHTML='<div class='image-error'>📷 Image not found<br><small>Click to manage</small></div>'"
-                   onclick="showImageManagement('${note.id}')">
-            </div>
-          </div>
-        `;
-      } else {
-        imagePreviewHtml = `
-          <div class="note-images" data-note-id="${note.id}">
-            <div class="image-preview-container">
-              <img class="image-preview-img" id="note-img-${note.id}" src="${displayPath}" alt="Note image" ${contentUriAttr} ${imagePathAttr}
-                   onerror="this.parentElement.innerHTML='<div class='image-error'>📷 ${imageCount} images attached<br><small>Click to manage</small></div>'"
-                   onclick="showImageManagement('${note.id}')">
-              <div class="image-counter">1 / ${imageCount}</div>
-              <button class="nav-btn prev-btn" onclick="event.stopPropagation(); rotateImage('${note.id}', -1)">&#10094;</button>
-              <button class="nav-btn next-btn" onclick="event.stopPropagation(); rotateImage('${note.id}', 1)">&#10095;</button>
-            </div>
-          </div>
-        `;
-      }
-    } else {
-      imagePreviewHtml = `
-        <div class="note-images" onclick="showImageManagement('${note.id}')">
-          <div class="image-preview image-placeholder">
-            📷 ${imageCount} image${imageCount > 1 ? 's' : ''} attached<br>
-            <small style="font-size: 12px; opacity: 0.7;">Click to manage images</small>
-          </div>
-        </div>
-      `;
+  const statusClass = note.done ? 'completed' : 'pending';
+  const imageCount = note.images ? note.images.length : 0;
+  let imageHtml = '';
+  if (imageCount > 0) {
+    const path = convertImagePathForDisplay(note.images[0]);
+    if (path) {
+        imageHtml = `<div class="note-images" data-note-id="${note.id}"><div class="image-preview-container"><img class="image-preview-img" src="${path}" alt="Note image"></div></div>`;
     }
   }
-  
-  return `
-    <div class="note-card ${isCompleted ? 'completed' : ''}" data-note-id="${note.id}">
-      <div class="note-header">
-        <div class="note-title">${escapeHtml(note.title)}</div>
-        <div class="note-actions">
-          ${isParent ? '<span class="parent-indicator" title="Parent Note">P</span>' : ''}
-        </div>
-      </div>
-      ${note.description ? `<div class="note-description">${escapeHtml(note.description)}</div>` : ''}
-      ${imagePreviewHtml}
-      ${hasSubNotes ? `<div class="sub-notes">📝 <span class="sub-notes-count">${subNotesCount}</span> sub-notes</div>` : ''}
-      <div class="note-meta">
-        <span class="note-id">#${note.id}</span>
-        <span class="note-date">${createdAt}</span>
-        <span class="note-status ${statusClass}">${statusText}</span>
-      </div>
-    </div>
-  `;
-}
-
-// Escape HTML to prevent XSS
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// Helper function to log image path conversion
-function debugImagePath(imagePath, context) {
-  console.log(`[ImageDebug] ${context}:`, {
-    originalPath: imagePath,
-    startsWithContent: imagePath?.startsWith('content://'),
-    startsWithStorage: imagePath?.startsWith('/storage/'),
-    startsWithSdcard: imagePath?.startsWith('/sdcard/'),
-    startsWithNote: imagePath?.startsWith('note_'),
-    startsWithImages: imagePath?.startsWith('images/')
-  });
-}
-
-// Update convertImagePathForDisplay function with better logging
-function convertImagePathForDisplay(imagePath) {
-  console.log('[ImageDebug] convertImagePathForDisplay input:', imagePath);
-  
-  if (!imagePath) {
-    console.error('[ImagePath] No image path provided');
-    return null;
-  }
-  
-  // If it's already a full URL, return as-is
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-    console.log('[ImagePath] Already a URL:', imagePath);
-    return imagePath;
-  }
-  
-  // If it's a content:// URI, we can't serve it directly
-  if (imagePath.startsWith('content://')) {
-    console.log('[ImagePath] Content URI detected, cannot serve directly:', imagePath);
-    return null;
-  }
-  
-  // If it's an absolute file path, we can't serve it directly from WebView
-  if (imagePath.startsWith('/storage/') || imagePath.startsWith('/sdcard/')) {
-    console.log('[ImagePath] Absolute file path detected, cannot serve directly:', imagePath);
-    return null;
-  }
-  
-  // For relative paths (like "note_1_123456_image.jpg"), serve from backend
-  // For mobile app, use 127.0.0.1 to access the local Node.js server
-  const imageUrl = `http://127.0.0.1:30000/image/${imagePath}`;
-  console.log('[ImagePath] Converted relative path to URL:', imageUrl);
-  return imageUrl;
-}
-
-// Update requestImageViaWebSocket with better logging
-function requestImageViaWebSocket(imagePath) {
-  console.log('[ImageRequest] Requesting image via WebSocket:', imagePath);
-  
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    const message = {
-      type: 'request_image',
-      path: imagePath
-    };
-    console.log('[ImageRequest] Sending message:', message);
-    ws.send(JSON.stringify(message));
-  } else {
-    console.error('[ImageRequest] WebSocket not ready, state:', ws?.readyState);
-  }
-}
-
-// Update createNoteCard to add more logging
-function createNoteCard(note) {
-  const isCompleted = note.done === true;
-  const isParent = !note.parent_id;
-  const hasSubNotes = note.subNotes && note.subNotes.length > 0;
-  const subNotesCount = hasSubNotes ? note.subNotes.length : 0;
-  const hasImages = note.images && note.images.length > 0;
-  const imageCount = hasImages ? note.images.length : 0;
-  
-  console.log(`[CreateCard] Creating card for note ${note.id}, images: ${imageCount}`);
-  if (hasImages) {
-    console.log(`[CreateCard] Note ${note.id} image paths:`, note.images);
-  }
-  
-  const statusText = isCompleted ? 'Completed' : 'Pending';
-  const statusClass = isCompleted ? 'completed' : 'pending';
-  
-  const createdAt = note.creation_date ? new Date(note.creation_date).toLocaleDateString() : 'Unknown';
-  
-  // Generate image preview HTML
-  let imagePreviewHtml = '';
-  if (hasImages) {
-    const firstImage = note.images[0];
-    console.log(`[CreateCard] Note ${note.id} first image:`, firstImage);
-    
-    const displayPath = convertImagePathForDisplay(firstImage);
-    console.log(`[CreateCard] Note ${note.id} display path:`, displayPath);
-    
-    if (displayPath) {
-      const contentUriAttr = firstImage.startsWith('content://') ? `data-content-uri="${firstImage}"` : '';
-      const imagePathAttr = (firstImage.startsWith('/storage/') || firstImage.startsWith('/sdcard/')) ? 
-        `data-image-path="${firstImage}"` : '';
-      
-      if (imageCount === 1) {
-        imagePreviewHtml = `
-          <div class="note-images" data-note-id="${note.id}">
-            <div class="image-preview-container">
-              <img class="image-preview-img" 
-                   src="${displayPath}" 
-                   alt="Note image" 
-                   ${contentUriAttr} 
-                   ${imagePathAttr}
-                   onload="console.log('[ImageLoad] Successfully loaded image for note ${note.id}:', this.src)"
-                   onerror="console.error('[ImageError] Failed to load image for note ${note.id}:', this.src); this.parentElement.innerHTML='<div class='image-error'>📷 Image not found<br><small>Path: ${firstImage}</small></div>'"
-                   onclick="showImageManagement('${note.id}')">
-            </div>
-          </div>
-        `;
-      } else {
-        imagePreviewHtml = `
-          <div class="note-images" data-note-id="${note.id}">
-            <div class="image-preview-container">
-              <img class="image-preview-img" 
-                   id="note-img-${note.id}" 
-                   src="${displayPath}" 
-                   alt="Note image" 
-                   ${contentUriAttr} 
-                   ${imagePathAttr}
-                   onload="console.log('[ImageLoad] Successfully loaded image for note ${note.id}:', this.src)"
-                   onerror="console.error('[ImageError] Failed to load image for note ${note.id}:', this.src); this.parentElement.innerHTML='<div class='image-error'>📷 ${imageCount} images<br><small>Click to manage</small></div>'"
-                   onclick="showImageManagement('${note.id}')">
-              <div class="image-counter">1 / ${imageCount}</div>
-            </div>
-          </div>
-        `;
-      }
-    } else {
-      console.error(`[CreateCard] No display path for note ${note.id}`);
-      imagePreviewHtml = `
-        <div class="note-images" data-note-id="${note.id}">
-          <div class="image-preview-container">
-            <div class="image-error">📷 ${imageCount} image${imageCount > 1 ? 's' : ''}<br><small>Click to manage</small></div>
-          </div>
-        </div>
-      `;
-    }
-  }
-
-  // Rest of the card HTML...
   return `
     <div class="note-card ${statusClass}" data-note-id="${note.id}">
-      <div class="note-header">
-        <h3 class="note-title">${escapeHtml(note.title)}</h3>
-      </div>
-      
-      ${imagePreviewHtml}
-      
-      ${note.description ? `<p class="note-description">${escapeHtml(note.description)}</p>` : ''}
-      
-      <div class="note-meta">
-        <span class="note-status ${statusClass}">${statusText}</span>
-        ${isParent ? '<span class="note-badge parent">📁 Parent</span>' : ''}
-        ${hasSubNotes ? `<span class="note-badge subnotes">📋 ${subNotesCount} sub-note${subNotesCount > 1 ? 's' : ''}</span>` : ''}
-        ${hasImages ? `<span class="note-badge images">📷 ${imageCount}</span>` : ''}
-      </div>
-      
-      <div class="note-footer">
-        <span class="note-id">#${note.id}</span>
-        <span class="note-date">${createdAt}</span>
-      </div>
+      <div class="note-header"><div class="note-title">${escapeHtml(note.title)}</div></div>
+      ${note.description ? `<div class="note-description">${escapeHtml(note.description)}</div>` : ''}
+      ${imageHtml}
+      <div class="note-meta"><span class="note-id">#${note.id}</span><span class="note-status ${statusClass}">${note.done ? 'Completed' : 'Pending'}</span></div>
     </div>
   `;
 }
 
-// Handle image data received via WebSocket
-function handleImageDataReceived(data) {
-  // Find all image elements that are waiting for this image path
-  // Check both data-image-path and data-content-uri attributes
-  const imageElements = document.querySelectorAll(`img[data-image-path="${data.imagePath}"], img[data-content-uri="${data.imagePath}"]`);
-  
-  imageElements.forEach(img => {
-    // Create data URL from base64 data
-    const dataUrl = `data:${data.contentType};base64,${data.data}`;
-    img.src = dataUrl;
-    img.removeAttribute('data-image-path');
-    img.removeAttribute('data-content-uri');
-    console.log('Successfully loaded image from content URI:', data.imagePath);
-  });
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text || '';
+  return d.innerHTML;
 }
 
-function handleImageUrlReceived(data) {
-  console.log('DEBUG: Received image URL:', data.imageUrl, 'for path:', data.imagePath);
-  
-  // Find all image elements that are waiting for this image path
-  const imageElements = document.querySelectorAll(`img[data-image-path="${data.imagePath}"], img[data-content-uri="${data.imagePath}"]`);
-  
-  imageElements.forEach(img => {
-    // Use the HTTP URL directly
-    img.src = data.imageUrl;
-    img.removeAttribute('data-image-path');
-    img.removeAttribute('data-content-uri');
-    console.log('✅ Successfully set HTTP image URL:', data.imageUrl);
-  });
+function convertImagePathForDisplay(path) {
+  if (!path || path.startsWith('http') || path.startsWith('content://')) return path;
+  return `http://127.0.0.1:30000/image/${path}`;
 }
 
-        // Handle image error received via WebSocket
-        function handleImageError(data) {
-          
-          // Find all image elements that are waiting for this image path
-          const imageElements = document.querySelectorAll(`img[data-image-path="${data.imagePath}"]`);
-          
-          imageElements.forEach(img => {
-            // Determine error type and show appropriate message
-            let errorMessage = "❌ Image Not Accessible";
-            let errorDetail = "Permission or file access issue";
-            
-            if (data.error.includes("Permission Denial")) {
-              errorMessage = "🔒 Permission Issue";
-              errorDetail = "Android storage restrictions prevent access";
-            } else if (data.error.includes("not found") || data.error.includes("file not found")) {
-              errorMessage = "📁 File Missing";
-              errorDetail = "Original file may have been moved or deleted";
-            }
-            
-            // Show error placeholder with cleanup option
-            img.parentElement.innerHTML = `
-              <div class="image-error" onclick="cleanupBrokenImage('${data.imagePath}')">
-                ${errorMessage}<br>
-                <small>${errorDetail}</small><br>
-                <small style="color: #888; margin-top: 4px;">Click to remove from note</small>
-              </div>`;
-          });
-        }
-        
-        // Clean up broken image from note
-        function cleanupBrokenImage(imagePath) {
-          
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            const message = {
-              type: 'cleanup_broken_image',
-              imagePath: imagePath
-            };
-            console.log('DEBUG: Sending cleanup request:', JSON.stringify(message));
-            ws.send(JSON.stringify(message));
-            
-            // Show feedback
-            showToast('🧹 Removing broken image link...');
-          } else {
-            console.log('DEBUG: WebSocket not available for cleanup');
-            showToast('❌ Cannot remove image - connection issue');
-          }
-        }
-        
-        // Simple toast notification
-        function showToast(message) {
-          // Create toast element
-          const toast = document.createElement('div');
-          toast.className = 'toast';
-          toast.textContent = message;
-          toast.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1a1d21;
-            color: #e6e6e6;
-            padding: 12px 24px;
-            border-radius: 8px;
-            border: 1px solid #333;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            z-index: 3000;
-            font-size: 14px;`;
-          
-          document.body.appendChild(toast);
-          
-          // Remove toast after 3 seconds
-          setTimeout(() => {
-            if (toast.parentNode) {
-              toast.parentNode.removeChild(toast);
-            }
-          }, 3000);
-        }
-
-// Show edit menu for a note
-function showEditMenu(noteId, event) {
-  event.stopPropagation();
-  event.preventDefault();
-  console.log('[EditMenu] Showing menu for note:', noteId, 'type:', typeof noteId);
-  
-  // Close any existing menus
-  document.querySelectorAll('.edit-menu').forEach(menu => menu.remove());
-  
-  // Find note using string comparison to handle type mismatches
-  const note = allNotes.find(n => String(n.id) === String(noteId));
-  
-  if (!note) {
-    console.error('[EditMenu] Note not found:', noteId);
-    console.error('[EditMenu] Available note IDs:', allNotes.map(n => `${n.id} (${typeof n.id})`));
-    return;
-  }
-  
-  console.log('[EditMenu] Found note:', note.title);
-  
-  // Create menu
-  const menu = document.createElement('div');
-  menu.className = 'edit-menu';
-  
-  // Open in chat option
-  const openChatItem = document.createElement('div');
-  openChatItem.className = 'edit-menu-item';
-  openChatItem.innerHTML = '💬 Open In Chat';
-  openChatItem.onclick = (e) => {
-    e.stopPropagation();
-    console.log('[EditMenu] Open in chat clicked for note:', noteId);
-    // Navigate to chat and automatically execute /findbyid command
-    window.location.href = `index.html?findbyid=${noteId}`;
-  };
-  menu.appendChild(openChatItem);
-
-  // Edit option
-  const editItem = document.createElement('div');
-  editItem.className = 'edit-menu-item';
-  editItem.innerHTML = '✏️ Edit Note';
-  editItem.onclick = (e) => {
-    e.stopPropagation();
-    console.log('[EditMenu] Edit clicked for note:', noteId);
-    openEditModal(noteId);
-  };
-  menu.appendChild(editItem);
-  
-  // Toggle done status
-  const toggleItem = document.createElement('div');
-  toggleItem.className = 'edit-menu-item';
-  toggleItem.innerHTML = note.done ? '⏳ Mark as Pending' : '✅ Mark as Done';
-  toggleItem.onclick = (e) => {
-    e.stopPropagation();
-    toggleNoteDone(noteId);
-  };
-  menu.appendChild(toggleItem);
-  
-  // Delete option
-  const deleteItem = document.createElement('div');
-  deleteItem.className = 'edit-menu-item danger';
-  deleteItem.innerHTML = '🗑️ Delete Note';
-  deleteItem.onclick = (e) => {
-    e.stopPropagation();
-    deleteNote(noteId);
-  };
-  menu.appendChild(deleteItem);
-  
-  // Position and show menu - use event.target instead of event.currentTarget
-  const button = event.target.closest('.note-menu-btn') || event.target;
-  const rect = button.getBoundingClientRect();
-  menu.style.position = 'fixed';
-  menu.style.top = `${rect.bottom + 5}px`;
-  menu.style.right = `${window.innerWidth - rect.right}px`;
-  
-  document.body.appendChild(menu);
-  
-  // Close menu when clicking outside
-  setTimeout(() => {
-    document.addEventListener('click', function closeMenuHandler(e) {
-      if (!menu.contains(e.target)) {
-        menu.remove();
-        document.removeEventListener('click', closeMenuHandler);
-      }
-    });
-  }, 0);
-}
-
-// Handle note card clicks - UPDATED with more debug logs
-document.addEventListener('click', function(e) {
-  // Check if it's a menu button click
-  if (e.target.classList.contains('note-menu-btn')) {
-    console.log('[Click] ========== MENU BUTTON CLICKED ==========');
-    console.log('[Click] Menu button clicked');
-    console.log('[Click] Target element:', e.target);
-    console.log('[Click] data-note-id attribute:', e.target.getAttribute('data-note-id'));
-    console.log('[Click] data-note-id type:', typeof e.target.getAttribute('data-note-id'));
-    
-    e.stopPropagation();
-    e.preventDefault();
-    
-    const noteIdAttr = e.target.getAttribute('data-note-id');
-    console.log('[Click] Raw noteId from attribute:', noteIdAttr);
-    
-    const noteId = parseInt(noteIdAttr);
-    console.log('[Click] Parsed noteId:', noteId);
-    console.log('[Click] Parsed noteId type:', typeof noteId);
-    console.log('[Click] Is NaN?', isNaN(noteId));
-    
-    showEditMenu(noteId, e);
-    return;
-  }
-  
-  // Check if clicking inside edit menu
-  if (e.target.closest('.edit-menu')) {
-    console.log('[Click] Edit menu item clicked');
-    return;
-  }
-  
-  // Check if it's a note card click (but not on actions area)
-  const noteCard = e.target.closest('.note-card');
-  if (noteCard && !e.target.closest('.note-actions') && !e.target.closest('.edit-menu')) {
-    const noteId = noteCard.getAttribute('data-note-id');
-    if (noteId) {
-      console.log('[Click] Note card clicked, opening menu');
-      // Open the menu instead of navigating to chat
-      showEditMenu(noteId, e);
-    }
-  }
-});
-
-// Add this after the convertImagePathForDisplay function
-
-// Enhanced image error handler
-function handleImageLoadError(imgElement, imagePath) {
-  console.error('Image failed to load:', imagePath);
-  console.error('Image element:', imgElement);
-  console.error('Current src:', imgElement.src);
-  
-  // Show detailed error information
-  const errorDiv = document.createElement('div');
-  errorDiv.className = 'image-error';
-  errorDiv.innerHTML = `
-    📷 Image Load Failed<br>
-    <small style="font-size: 10px; opacity: 0.7;">
-      Path: ${imagePath.substring(0, 30)}...<br>
-      Click to retry
-    </small>
-  `;
-  
-  errorDiv.onclick = () => {
-    console.log('Retrying image load for:', imagePath);
-    const newSrc = convertImagePathForDisplay(imagePath);
-    if (newSrc) {
-      imgElement.src = newSrc;
-      errorDiv.remove();
-    }
-  };
-  
-  imgElement.parentElement.appendChild(errorDiv);
-  imgElement.style.display = 'none';
+function showToast(message) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = message;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
 }
 </script>
 </body>

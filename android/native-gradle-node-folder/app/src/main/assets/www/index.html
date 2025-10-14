@@ -89,6 +89,7 @@
     <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
       <button id="chatButton" class="nav-button active">💬 Chat</button>
       <button id="explorerButton" class="nav-button secondary">📝 Note Explorer</button>
+      <button id="settingsButton" class="nav-button secondary">⚙️ Settings</button>
     </div>
     
     <h3>Gemini API Configuration</h3>
@@ -143,15 +144,14 @@ const Settings = {
 };
 
 // Global variables
-let currentNoteId = null;  // Store the current note ID for uploads
-let selectedFiles = [];    // Store selected files for upload
+let currentNoteId = null;
+let selectedFiles = [];
 
-// Global auto confirmation state
 var GlobalAutoConfirm = {
   enabled: false,
   toggle: function() {
     this.enabled = !this.enabled;
-    Settings.autoConfirm = this.enabled; // Update Settings object
+    Settings.autoConfirm = this.enabled;
     this.updateUI();
     this.saveToStorage();
     this.updateBackend();
@@ -170,20 +170,12 @@ var GlobalAutoConfirm = {
   loadFromStorage: function() {
     const saved = localStorage.getItem('globalAutoConfirm');
     this.enabled = saved === 'true';
-    Settings.autoConfirm = this.enabled; // Update Settings object
+    Settings.autoConfirm = this.enabled;
     this.updateUI();
   },
   updateBackend: function() {
-    // Send current state to backend
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'set_auto_confirm',
-        enabled: this.enabled
-      }));
-      
-      // Also update the autoConfirm setting for the next chat message
-      Settings.autoConfirm = this.enabled;
-    }
+    sendToWorker({ type: 'set_auto_confirm', enabled: this.enabled });
+    Settings.autoConfirm = this.enabled;
   }
 };
 
@@ -195,8 +187,6 @@ const langSel = document.getElementById("lang");
 const clearBtn= document.getElementById("clearBtn");
 const micBtn  = document.getElementById("micBtn");
 const useTTS  = document.getElementById("useTTS");
-
-// Side menu elements
 const menuBtn = document.getElementById("menuBtn");
 const sideMenu = document.getElementById("sideMenu");
 const overlay = document.getElementById("overlay");
@@ -209,148 +199,79 @@ const showNotes = document.getElementById("showNotes");
 const notesDisplay = document.getElementById("notesDisplay");
 const clearNotes = document.getElementById("clearNotes");
 const clearChatHistoryBtn = document.getElementById("clearChatHistory");
-// Old checkbox removed - using toggle button system now
 const chatButton = document.getElementById("chatButton");
 const explorerButton = document.getElementById("explorerButton");
-
-// Commands popup elements
+const settingsButton = document.getElementById("settingsButton");
 const helpBtn = document.getElementById("helpBtn");
 const commandsPopup = document.getElementById("commandsPopup");
 const commandsOverlay = document.getElementById("commandsOverlay");
 const closeCommands = document.getElementById("closeCommands");
 const commandsContent = document.getElementById("commandsContent");
 
-// Backend now handles all context detection
-
-// Dynamic commands cache
 let availableCommands = [];
 let commandsLoaded = false;
-
-// Command history management
 let commandHistory = [];
 const MAX_COMMAND_HISTORY = 10;
 
-// Function to add command to history
 function addToCommandHistory(command) {
-  // Remove if already exists to avoid duplicates
   commandHistory = commandHistory.filter(cmd => cmd !== command);
-  // Add to beginning
   commandHistory.unshift(command);
-  // Keep only the latest 10
   if (commandHistory.length > MAX_COMMAND_HISTORY) {
     commandHistory = commandHistory.slice(0, MAX_COMMAND_HISTORY);
   }
-  // Save to localStorage
   localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
 }
 
-// Function to load command history from localStorage
 function loadCommandHistory() {
   const saved = localStorage.getItem('commandHistory');
   if (saved) {
-    try {
-      commandHistory = JSON.parse(saved);
-    } catch (e) {
-      commandHistory = [];
-    }
+    try { commandHistory = JSON.parse(saved); } catch (e) { commandHistory = []; }
   }
 }
 
-// Function to get command history
-function getCommandHistory() {
-  return commandHistory;
-}
+function getCommandHistory() { return commandHistory; }
 
-// Function to update connection status LED
 function updateConnectionStatus(connected) {
   const statusLed = document.getElementById('statusLed');
   const statusText = document.getElementById('statusText');
-  if (statusLed && statusText) {
-    if (connected) {
-      statusLed.className = 'connection-led connected';
-      statusText.textContent = 'Connected';
-      statusLed.title = 'Connected to server';
-    } else {
-      statusLed.className = 'connection-led disconnected';
-      statusText.textContent = 'Connecting...';
-      statusLed.title = 'Disconnected from server';
-    }
+  if (!statusLed || !statusText) return;
+  if (connected) {
+    statusLed.className = 'connection-led connected';
+    statusText.textContent = 'Connected';
+  } else {
+    statusLed.className = 'connection-led disconnected';
+    statusText.textContent = 'Connecting...';
   }
 }
 
-// Function to load available commands from backend
 function loadAvailableCommands() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    try {
-      ws.send(JSON.stringify({type: 'get_commands'}));
-    } catch (error) {
-      console.log("Error requesting commands:", error);
-    }
-  }
+  sendToWorker({type: 'get_commands'});
 }
 
-// Function to generate dynamic commands HTML
 function generateDynamicCommands() {
-  if (availableCommands.length === 0) {
-    return '<div class="command-category"><h4>❌ No commands available</h4></div>';
-  }
-  
-  // Group commands by category
+  if (availableCommands.length === 0) return '<div class="command-category"><h4>❌ No commands available</h4></div>';
   const categories = {};
   availableCommands.forEach(cmd => {
-    if (!categories[cmd.category]) {
-      categories[cmd.category] = [];
-    }
+    if (!categories[cmd.category]) categories[cmd.category] = [];
     categories[cmd.category].push(cmd);
   });
-  
   let html = '';
   for (const category in categories) {
-    html += `<div class="command-category">`;
-    html += `<h4>${category}</h4>`;
+    html += `<div class="command-category"><h4>${category}</h4>`;
     categories[category].forEach(cmd => {
       const commandText = cmd.requiresParam ? cmd.command + ' ' : cmd.command;
       let buttonText = cmd.command;
-      
-      // Generate command button
-      
-      // Add description to the button text
-      if (cmd.description) {
-        buttonText += ` <span style="opacity: 0.6; font-size: 0.85em; font-style: italic;">[${cmd.description}]</span>`;
-      }
-      
-      // Add examples for commands that need parameters
-      if (cmd.requiresParam && cmd.examples && cmd.examples.length > 0) {
-        const example = cmd.examples[0];
-        buttonText += ` <span style="opacity: 0.7; font-size: 0.9em;">(${example})</span>`;
-      }
-      
-      const buttonHtml = `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
-      html += buttonHtml;
+      if (cmd.description) buttonText += ` <span style="opacity: 0.6; font-size: 0.85em; font-style: italic;">[${cmd.description}]</span>`;
+      if (cmd.requiresParam && cmd.examples && cmd.examples.length > 0) buttonText += ` <span style="opacity: 0.7; font-size: 0.9em;">(${cmd.examples[0]})</span>`;
+      html += `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
     });
     html += `</div>`;
   }
-  
   return html;
 }
 
-// Function to update mode based on backend messages (simplified - backend handles context)
 function updateModeFromMessage(message) {
-  // Backend now handles all context detection, so we just need to trigger command refresh
-  if (message.includes("What would you like to do?") || message.includes("מה תרצה לעשות?") ||
-      message.includes("To start editing") || message.includes("כדי להתחיל לערוך") ||
-      message.includes("Started AI conversation") || message.includes("התחלתי שיחה עם AI") ||
-      message.includes("AI conversation cancelled") || message.includes("שיחה עם AI בוטלה") ||
-      message.includes("Do you want to create") || message.includes("האם תרצה ליצור") || 
-      message.includes("Do you want to delete") || message.includes("האם תרצה למחוק") ||
-      message.includes("Do you want to mark") || message.includes("האם תרצה לסמן") ||
-      message.includes("Which note would you like to select") || message.includes("איזה פתק תרצה לבחור") ||
-      message.includes("updated successfully") || message.includes("עודכן בהצלחה") ||
-      message.includes("created successfully") || message.includes("נוצר בהצלחה") ||
-      message.includes("deleted successfully") || message.includes("נמחק בהצלחה") ||
-      message.includes("cancelled") || message.includes("בוטל")) {
-    
-    // Request updated commands from backend
+  if (message.includes("What would you like to do?") || message.includes("cancelled")) {
     loadAvailableCommands();
   }
 }
@@ -360,45 +281,28 @@ langSel.onchange = () => {
   document.documentElement.dir = (Settings.lang === "he") ? "rtl" : "ltr";
 };
 clearBtn.onclick = () => { 
-  if (confirm("Are you sure you want to clear all chat messages? This action cannot be undone.")) {
+  if (confirm("Are you sure you want to clear all chat messages?")) {
     logEl.innerHTML = ""; 
     clearChatHistory();
     addMsg("🗑️ Chat messages cleared", "sys");
   }
 };
 
-/* ---------- Commands Popup Functionality ---------- */
-// Function to populate commands based on backend context
 function populateCommands() {
   commandsContent.innerHTML = '';
-  
-  // Add history section if there are commands in history
   const history = getCommandHistory();
   if (history.length > 0) {
-    let historyHtml = `
-      <div class="command-category">
-        <h4>🕒 Recent Commands</h4>
-    `;
+    let historyHtml = `<div class="command-category"><h4>🕒 Recent Commands</h4>`;
     for (let i = 0; i < Math.min(history.length, 5); i++) {
-      const cmd = history[i];
-      historyHtml += `<button class="command-btn" data-command="${cmd}">${cmd}</button>`;
+      historyHtml += `<button class="command-btn" data-command="${history[i]}">${history[i]}</button>`;
     }
     historyHtml += `</div>`;
     commandsContent.innerHTML += historyHtml;
   }
-  
-  // Use backend commands exclusively
   if (commandsLoaded && availableCommands.length > 0) {
-    const generatedHtml = generateDynamicCommands();
-    commandsContent.innerHTML += generatedHtml;
+    commandsContent.innerHTML += generateDynamicCommands();
   } else {
-    // Fallback message if no commands available
-    commandsContent.innerHTML += `
-      <div class="command-category">
-        <h4>❌ No commands available</h4>
-        <p>Loading commands from backend...</p>
-      </div>
-    `;
+    commandsContent.innerHTML += `<div class="command-category"><h4>❌ No commands available</h4><p>Loading...</p></div>`;
   }
 }
 
@@ -418,45 +322,23 @@ commandsOverlay.onclick = () => {
   commandsOverlay.classList.remove("show");
 };
 
-
-// Handle command button clicks
 document.addEventListener('click', (e) => {
-  console.log("Click detected on:", e.target.tagName, "classes:", e.target.className);
-  
-  // Find the closest command button (handles clicks on child elements)
   const commandButton = e.target.closest('.command-btn');
-  console.log("Closest command button:", commandButton);
-  
   if (commandButton) {
     const command = commandButton.getAttribute('data-command');
-    console.log("Command button clicked:", command);
-    
     if (command) {
-      // Add the command to the input field
       inputEl.value = command;
-      console.log("Set input value to:", inputEl.value);
-      
-      // Add to command history
       addToCommandHistory(command);
-      
-      // Close the popup
       commandsPopup.classList.remove("show");
       commandsOverlay.classList.remove("show");
-      
-      // Focus on the input field for user to complete or send
       inputEl.focus();
-      
-      // Move cursor to end of text
       inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
-      
-      // Prevent event from bubbling
       e.preventDefault();
       e.stopPropagation();
     }
   }
 });
 
-/* ---------- Side Menu Functionality ---------- */
 menuBtn.onclick = () => {
   sideMenu.classList.add("open");
   overlay.classList.add("show");
@@ -473,44 +355,19 @@ overlay.onclick = () => {
   overlay.classList.remove("show");
 };
 
-// Navigation functionality
 function navigateToPage(page) {
-  // Close the side menu
-  sideMenu.classList.remove("open");
-  overlay.classList.remove("show");
-  
-  // Update active button
-  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
-  
-  switch(page) {
-    case 'chat':
-      // We're already on the chat page
-      chatButton.classList.add('active');
-      console.log("Already on Chat page");
-      break;
-    case 'explorer':
-      // Navigate to explorer.html
-      window.location.href = 'explorer.html';
-      break;
-  }
+  window.location.href = page;
 }
 
-// Navigation button handlers
-  chatButton.onclick = () => navigateToPage('chat');
-  explorerButton.onclick = () => navigateToPage('explorer');
-  
-  // Auto confirm toggle button
-  const toggleAutoConfirmBtn = document.getElementById('toggleAutoConfirmBtn');
-  if (toggleAutoConfirmBtn) {
-    toggleAutoConfirmBtn.onclick = () => {
-      const newState = GlobalAutoConfirm.toggle();
-      console.log('Auto confirmation toggled to:', newState);
-    };
-  }
+chatButton.onclick = () => navigateToPage('index.html');
+explorerButton.onclick = () => navigateToPage('explorer.html');
+settingsButton.onclick = () => navigateToPage('settings.html');
 
-// Old checkbox handler removed - using toggle button system now
+const toggleAutoConfirmBtn = document.getElementById('toggleAutoConfirmBtn');
+if (toggleAutoConfirmBtn) {
+  toggleAutoConfirmBtn.onclick = () => GlobalAutoConfirm.toggle();
+}
 
-// Load stored API key from localStorage
 function loadStoredApiKey() {
   const storedKey = localStorage.getItem('geminiApiKey');
   if (storedKey) {
@@ -522,45 +379,24 @@ function loadStoredApiKey() {
     apiStatus.textContent = "Using default API key";
     apiStatus.style.color = "#FFA500";
   }
-  
-  // Old auto confirmation loading removed - using GlobalAutoConfirm system now
-  
-  // Initialize global auto confirm
   GlobalAutoConfirm.loadFromStorage();
-  
-  // Initialize Settings.autoConfirm with the current value
   Settings.autoConfirm = GlobalAutoConfirm.enabled;
 }
 
-// Old auto confirmation functions removed - using GlobalAutoConfirm system now
-
-// Save API key
 saveApiKey.onclick = () => {
   const key = geminiApiKey.value.trim();
   if (key) {
     localStorage.setItem('geminiApiKey', key);
     Settings.geminiApiKey = key;
-    apiStatus.textContent = "Using custom API key";
+    apiStatus.textContent = "Custom API key saved";
     apiStatus.style.color = "#4CAF50";
-    addMsg("✅ API key saved successfully!", "sys");
-    
-    // Send API key to backend for daily summary
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({
-          type: 'save_settings',
-          geminiApiKey: key
-        }));
-      } catch (error) {
-        console.log("Error sending API key to backend:", error);
-      }
-    }
+    addMsg("✅ API key saved!", "sys");
+    sendToWorker({ type: 'save_settings', geminiApiKey: key });
   } else {
     addMsg("❌ Please enter a valid API key", "sys");
   }
 };
 
-// Use default API key
 useDefaultKey.onclick = () => {
   localStorage.removeItem('geminiApiKey');
   Settings.geminiApiKey = "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4";
@@ -568,707 +404,255 @@ useDefaultKey.onclick = () => {
   apiStatus.textContent = "Using default API key";
   apiStatus.style.color = "#FFA500";
   addMsg("✅ Switched to default API key", "sys");
-  
-  // Send default API key to backend for daily summary
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    try {
-      ws.send(JSON.stringify({
-        type: 'save_settings',
-        geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4"
-      }));
-    } catch (error) {
-      console.log("Error sending default API key to backend:", error);
-    }
-  }
+  sendToWorker({ type: 'save_settings', geminiApiKey: Settings.geminiApiKey });
 };
 
-// Show notes debug
 showNotes.onclick = () => {
   if (notesDisplay.style.display === "none") {
-    // Request notes from backend
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({type:'debug', action:'get_notes'}));
-        showNotes.textContent = "Hide Notes";
-        notesDisplay.style.display = "block";
-      } catch (error) {
-        addMsg("Error sending debug request: " + error.message, "sys");
-      }
-    } else {
-      addMsg("Not connected to backend", "sys");
-    }
+    sendToWorker({type:'debug', action:'get_notes'});
+    showNotes.textContent = "Hide Notes";
   } else {
-    // Hide notes
     showNotes.textContent = "Show Notes (Debug)";
     notesDisplay.style.display = "none";
   }
 };
 
-// Clear all notes
 clearNotes.onclick = () => {
-  const warningMessage = `⚠️ DANGER: Clear All Notes
-
-This action will PERMANENTLY DELETE:
-• All notes and their descriptions
-• All sub-notes and their relationships  
-• All note history and metadata
-• All AI conversation history
-
-🚨 THIS ACTION CANNOT BE UNDONE! 🚨
-
-Are you absolutely sure you want to continue?`;
-
-  if (confirm(warningMessage)) {
-    // Double confirmation for extra safety
-    const finalConfirm = confirm("FINAL WARNING: This will delete EVERYTHING!\n\nType 'DELETE' in the next prompt to confirm:");
-    
-    if (finalConfirm) {
-      const userInput = prompt("Type 'DELETE' to permanently clear all notes:");
-      
-      if (userInput === 'DELETE') {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          try {
-            ws.send(JSON.stringify({type:'debug', action:'clear_notes'}));
-            addMsg("🗑️ Clearing all notes... This action cannot be undone!", "sys");
-          } catch (error) {
-            addMsg("Error sending clear request: " + error.message, "sys");
-          }
-        } else {
-          addMsg("Not connected to backend", "sys");
-        }
-      } else {
-        addMsg("❌ Clear operation cancelled - you must type 'DELETE' exactly", "sys");
-      }
-    } else {
-      addMsg("❌ Clear operation cancelled", "sys");
-    }
-  } else {
-    addMsg("❌ Clear operation cancelled", "sys");
+  if (confirm("DANGER: This will permanently delete all notes. Are you sure?")) {
+    sendToWorker({type:'debug', action:'clear_notes'});
   }
 };
 
-// Clear chat history
 clearChatHistoryBtn.onclick = () => {
-  if (confirm("Are you sure you want to clear all chat history? This action cannot be undone.")) {
+  if (confirm("Are you sure you want to clear the chat history?")) {
     clearChatHistory();
     addMsg("🗑️ Chat history cleared", "sys");
   }
 };
 
-/* ---------- WebSocket connection to DroidScript backend ---------- */
-let ws;
-let reconnectInterval = 5000; // 5 seconds
-let reconnectTimer = null;
-let messageQueue = [];
-
-function connect() {
-  // Clear any existing reconnect timer
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-
-  // If WebSocket is already connecting or open, do nothing
-  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
-    return;
-  }
-
-  // Connect to Node.js server on localhost:30000
-  // For mobile app, always use 127.0.0.1 for WebSocket connection
-  const host = '127.0.0.1';
-  const url = `ws://${host}:30000`;
-  ws = new WebSocket(url);
-
-  ws.onopen = () => {
-    updateConnectionStatus(true);
-
-    // Process any queued messages
-    while (messageQueue.length > 0) {
-      const message = messageQueue.shift();
-      try {
-        ws.send(JSON.stringify(message));
-        addMsg(`✅ Sent queued message: "${message.text.substring(0, 30)}..."`, "sys");
-      } catch (error) {
-        addMsg(`Error sending queued message: ${error.message}`, "sys");
-        // If sending fails, put it back at the front of the queue
-        messageQueue.unshift(message);
-        // And close the connection to trigger a reconnect
-        ws.close();
-        break; // Exit the loop
-      }
+/* ---------- Service Worker and WebSocket Logic ---------- */
+function sendToWorker(messageObject) {
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage(JSON.stringify(messageObject));
+    } else {
+        console.error("Service worker not in control. Cannot send message.");
+        addMsg("Connection not ready. Please wait...", "sys");
     }
-
-    loadAvailableCommands();
-    handleUrlParameters();
-
-    const savedNoteId = localStorage.getItem('currentNoteId');
-    if (savedNoteId) {
-      ws.send(JSON.stringify({
-        type: 'restore_context',
-        noteId: savedNoteId
-      }));
-    }
-  };
-
-  ws.onclose = () => {
-    updateConnectionStatus(false);
-    if (!reconnectTimer) {
-        reconnectTimer = setTimeout(connect, reconnectInterval);
-    }
-  };
-
-  ws.onerror = e => {
-    updateConnectionStatus(false);
-    // onclose will be called next, which handles the reconnect logic.
-    // No need to add a message here to avoid duplicates.
-  };
-  
-  // In the ws.onmessage handler, add this case after the existing cases:
-  
-  ws.onmessage = ev=>{
-      try{ 
-        const msg=JSON.parse(ev.data); 
-        console.log("DEBUG: Received WebSocket message:", msg.type, msg);
-        
-        if(msg.type==='reply') {
-          // Try to extract noteId from the message text, e.g., "(ID: 123)"
-          const idMatch = msg.text.match(/\(ID: (\d+)\)/);
-          if (idMatch && idMatch[1]) {
-            const noteId = idMatch[1];
-            currentNoteId = noteId;
-            localStorage.setItem('currentNoteId', currentNoteId);
-            addMsg(`📝 Note context automatically set to ID: ${currentNoteId}`, 'sys');
-          }
-
-          // Check for messages that imply the context should be cleared.
-          const clearContextMessages = [
-            'No parent note selected',
-            'No notes have been found',
-            'cleared successfully',
-            'Returned to main menu'
-          ];
-
-          if (clearContextMessages.some(m => msg.text.includes(m))) {
-            currentNoteId = null;
-            localStorage.removeItem('currentNoteId');
-            addMsg('📝 Note context cleared.', 'sys');
-          }
-
-          // Filter out system messages that shouldn't be shown to user
-          const systemMessages = [
-            'Note created successfully',
-            'Note updated successfully', 
-            'Note deleted successfully',
-            'נוצר בהצלחה',
-            'עודכן בהצלחה',
-            'נמחק בהצלחה'
-          ];
-          
-          // Check if this is a system message
-          const isSystemMessage = systemMessages.some(sysMsg => msg.text.includes(sysMsg));
-          
-          // Only display if it's not a system message
-          if (!isSystemMessage) {
-            addMsg(msg.text,'bot');
-            
-            // Update mode based on backend message
-            updateModeFromMessage(msg.text);
-            
-            // Speak bot responses if TTS is enabled
-            if (useTTS.checked) {
-              speakText(msg.text);
-            }
-          }
-        }
-        else if(msg.type==='request_image_upload') {
-          console.log("DEBUG: Handling request_image_upload message");
-          console.log("DEBUG: Note ID:", msg.data.noteId);
-          console.log("DEBUG: Current image count:", msg.data.currentImageCount);
-          
-          // Show the upload modal for this note
-          showUploadModal(msg.data.noteId);
-          addMsg("📷 Please select an image to upload", "sys");
-        }
-        else if(msg.type==='trigger_image_upload') {
-          console.log('DEBUG: Received trigger_image_upload with noteId:', msg.noteId);
-          currentNoteId = msg.noteId;  // Store the noteId globally
-          localStorage.setItem('currentNoteId', currentNoteId); // Save to local storage
-          showUploadModal(msg.noteId);
-        }
-        else if(msg.type==='debug_notes') {
-          notesDisplay.textContent = msg.notes;
-          notesDisplay.style.display = "block";
-        }
-        else if(msg.type==='debug_cleared') {
-          addMsg("All notes cleared successfully!", "sys");
-          // Hide notes display if it's showing
-          notesDisplay.style.display = "none";
-          showNotes.textContent = "Show Notes (Debug)";
-        }
-        
-        else if(msg.type==='available_commands') {
-          // Handle dynamic commands from backend
-          availableCommands = msg.commands || [];
-          commandsLoaded = true;
-          console.log("Loaded dynamic commands:", availableCommands);
-        }
-        else if(msg.type==='set_auto_confirm') {
-          // Handle set_auto_confirm message from backend
-          GlobalAutoConfirm.enabled = msg.enabled;
-          Settings.autoConfirm = msg.enabled;
-          GlobalAutoConfirm.updateUI();
-        }
-        else if(msg.type==='auto_confirm_status') {
-          // Update UI when auto-confirmation status changes
-          GlobalAutoConfirm.enabled = msg.enabled;
-          Settings.autoConfirm = msg.enabled;
-          GlobalAutoConfirm.updateUI();
-        }
-        else if(msg.type==='found_notes') {
-          // Handle found_notes message with human-readable text
-          if (msg.notes && msg.notes.length > 0) {
-            // Notes found - let the backend handle the display
-          } else {
-            // No notes found - show human-readable message
-            addMsg('No notes have been found', 'bot');
-          }
-        }
-        else if(msg.type==='thinking') {
-          // Show thinking indicator
-          showThinkingIndicator();
-        }
-        else if(msg.type==='thinking_done') {
-          // Hide thinking indicator
-          hideThinkingIndicator();
-        }
-        else {
-          console.log("DEBUG: Unhandled message type:", msg.type);
-          addMsg(ev.data,'sys');
-        }
-      }
-      catch(error){ 
-        console.log("DEBUG: Error parsing WebSocket message:", error);
-        addMsg(ev.data,'bot'); 
-      }
-    };
 }
 
+function initializeServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./service-worker.js').then(reg => {
+            console.log('Service Worker registered.', reg);
+            if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
+            }
+        }).catch(err => {
+            console.error('Service Worker registration failed:', err);
+        });
+
+        navigator.serviceWorker.addEventListener('message', event => {
+            try {
+                const msg = JSON.parse(event.data);
+                console.log("DEBUG: Received message:", msg.type, msg);
+
+                switch (msg.type) {
+                    case 'ws_open':
+                        updateConnectionStatus(true);
+                        loadAvailableCommands();
+                        handleUrlParameters();
+                        const savedNoteId = localStorage.getItem('currentNoteId');
+                        if (savedNoteId) sendToWorker({ type: 'restore_context', noteId: savedNoteId });
+                        return;
+                    case 'ws_close':
+                        updateConnectionStatus(false);
+                        return;
+                    case 'ws_error':
+                        updateConnectionStatus(false);
+                        addMsg("Connection error.", "sys");
+                        return;
+                }
+
+                // Original onmessage logic
+                if(msg.type==='reply') {
+                  const idMatch = msg.text.match(/\(ID: (\d+)\)/);
+                  if (idMatch && idMatch[1]) {
+                    currentNoteId = idMatch[1];
+                    localStorage.setItem('currentNoteId', currentNoteId);
+                  }
+                  if ([ 'No parent note selected', 'No notes have been found', 'cleared successfully', 'Returned to main menu' ].some(m => msg.text.includes(m))) {
+                    currentNoteId = null;
+                    localStorage.removeItem('currentNoteId');
+                  }
+                  if (![
+                    'Note created successfully',
+                    'Note updated successfully',
+                    'Note deleted successfully',
+                    'נוצר בהצלחה',
+                    'עודכן בהצלחה',
+                    'נמחק בהצלחה'
+                  ].some(sysMsg => msg.text.includes(sysMsg))) {
+                    addMsg(msg.text,'bot');
+                    updateModeFromMessage(msg.text);
+                    if (useTTS.checked) speakText(msg.text);
+                  }
+                }
+                else if(msg.type==='request_image_upload') { showUploadModal(msg.data.noteId); }
+                else if(msg.type==='trigger_image_upload') { currentNoteId = msg.noteId; localStorage.setItem('currentNoteId', currentNoteId); showUploadModal(msg.noteId); }
+                else if(msg.type==='debug_notes') { notesDisplay.textContent = msg.notes; notesDisplay.style.display = "block"; }
+                else if(msg.type==='debug_cleared') { addMsg("All notes cleared!", "sys"); notesDisplay.style.display = "none"; showNotes.textContent = "Show Notes (Debug)"; }
+                else if(msg.type==='available_commands') { availableCommands = msg.commands || []; commandsLoaded = true; }
+                else if(msg.type==='auto_confirm_status') { GlobalAutoConfirm.enabled = msg.enabled; Settings.autoConfirm = msg.enabled; GlobalAutoConfirm.updateUI(); }
+                else if(msg.type==='found_notes' && (!msg.notes || msg.notes.length === 0)) { addMsg('No notes found', 'bot'); }
+                else if(msg.type==='thinking') { showThinkingIndicator(); }
+                else if(msg.type==='thinking_done') { hideThinkingIndicator(); }
+                else if (msg.type !== 'ws_open' && msg.type !== 'ws_close') {
+                  console.log("DEBUG: Unhandled message type:", msg.type);
+                  addMsg(event.data,'sys');
+                }
+            } catch (error) {
+                console.log("DEBUG: Received non-JSON message:", event.data, error);
+                addMsg(event.data, 'bot');
+            }
+        });
+    } else {
+        alert('Service Workers are not supported in this browser.');
+    }
+}
 
 /* ---------- Chat flow ---------- */
 formEl.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = (inputEl.value || "").trim();
   if (!text) return;
-
   addMsg(text, "you");
-
-  // Add to command history if it looks like a command
-  if (isCommand(text)) {
-    addToCommandHistory(text);
-  }
-
+  if (isCommand(text)) addToCommandHistory(text);
   inputEl.value = "";
-
-  const message = { type: 'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm };
-
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    try {
-      ws.send(JSON.stringify(message));
-    } catch (error) {
-      addMsg("Error sending message: " + error.message, "sys");
-    }
-  } else {
-    addMsg("Connection is down. Queuing message and attempting to reconnect...", "sys");
-    messageQueue.push(message);
-    connect();
-  }
+  sendToWorker({ type: 'chat', text, lang: Settings.lang, autoConfirm: Settings.autoConfirm });
   scrollToBottom();
 });
 
-// Function to check if text looks like a command
 function isCommand(text) {
-  const commandPatterns = [
-    /^\/\w+/i, // Slash commands
-    /^(create|find|show|help|edit|delete|mark|talk|stop|yes|no)\b/i,
-    /^(צור|מצא|הצג|עזרה|ערוך|מחק|סמן|דבר|עצור|כן|לא)\b/i
-  ];
-  return commandPatterns.some(pattern => pattern.test(text));
+  return [ /^\/\w+/i, /^(create|find|show|help|edit|delete|mark|talk|stop|yes|no)\b/i ].some(p => p.test(text));
 }
 
-/* ---------- Speech-to-Text (Web Speech API) ---------- */
+/* ---------- Speech-to-Text & Text-to-Speech ---------- */
 let rec = null;
 let isRecording = false;
-
-micBtn.onclick = () => {
-  if (isRecording) {
-    stopRecording();
-  } else {
-    startRecording();
-  }
-};
+micBtn.onclick = () => { isRecording ? stopRecording() : startRecording(); };
 
 function startRecording() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { 
-    addMsg("❌ Speech Recognition not supported in this browser.", "sys"); 
-    return; 
-  }
-  
+  if (!SR) return addMsg("❌ Speech Recognition not supported.", "sys");
   try {
     if (!rec) {
       rec = new SR();
       rec.continuous = true;
       rec.interimResults = true;
-      rec.maxAlternatives = 1;
-      
-      rec.onstart = () => {
-        isRecording = true;
-        micBtn.textContent = "■ Stop Recording";
-        micBtn.classList.add("recording");
-        addMsg("🎤 Listening... Speak now", "sys");
-      };
-      
+      rec.onstart = () => { isRecording = true; micBtn.textContent = "■ Stop"; micBtn.classList.add("recording"); };
       rec.onresult = (e) => {
-        let finalTranscript = "";
-        let interimTranscript = "";
-        
+        let final = "", interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          const transcript = e.results[i][0].transcript;
-          if (e.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
+          const t = e.results[i][0].transcript;
+          e.results[i].isFinal ? final += t : interim += t;
         }
-        
-        // Normal mode - replace content
-        if (finalTranscript) {
-          inputEl.value = finalTranscript;
-        } else if (interimTranscript) {
-          inputEl.value = interimTranscript;
-        }
+        inputEl.value = final || interim;
       };
-      
-      rec.onerror = (e) => {
-        addMsg("❌ Speech recognition error: " + e.error, "sys");
-        stopRecording();
-      };
-      
-      rec.onend = () => {
-        stopRecording();
-      };
+      rec.onerror = (e) => { addMsg("❌ Speech error: " + e.error, "sys"); stopRecording(); };
+      rec.onend = () => stopRecording();
     }
-    
-    // Set language
     rec.lang = (Settings.lang === "he") ? "he-IL" : "en-US";
-    
-    // Clear input field
     inputEl.value = "";
-    
-    // Start recognition
     rec.start();
-    
   } catch (error) {
     addMsg("❌ Failed to start speech recognition: " + error.message, "sys");
   }
 }
 
 function stopRecording() {
-  if (rec && isRecording) {
-    rec.stop();
-  }
+  if (rec && isRecording) rec.stop();
   isRecording = false;
   micBtn.textContent = "🎤 Speak";
   micBtn.classList.remove("recording");
-  
-  if (inputEl.value.trim()) {
-    addMsg("✅ Ready to send: " + inputEl.value, "sys");
-  }
 }
 
-
-/* ---------- Text-to-Speech ---------- */
 async function speakText(text) {
-  if (!useTTS.checked) return;
-  
-  // Check if browser supports Speech Synthesis
-  if (!('speechSynthesis' in window)) {
-    addMsg("❌ Text-to-speech not supported in this browser", "sys");
-    return;
-  }
-  
+  if (!useTTS.checked || !('speechSynthesis' in window)) return;
   try {
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
-    
-    // Create speech utterance
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Set language based on settings
-    const lang = (Settings.lang === "he") ? "he-IL" : "en-US";
-    utterance.lang = lang;
-    
-    // Optional: Configure voice properties
-    utterance.rate = 1.0;  // Speed (0.1 to 10)
-    utterance.pitch = 1.0; // Pitch (0 to 2)
-    utterance.volume = 1.0; // Volume (0 to 1)
-    
-    // Speak the text
+    utterance.lang = (Settings.lang === "he") ? "he-IL" : "en-US";
     window.speechSynthesis.speak(utterance);
-    
   } catch (error) {
     console.error('Speech synthesis error:', error);
-    addMsg("❌ Failed to read message", "sys");
   }
 }
 
 /* ---------- URL Parameter Handling ---------- */
 function handleUrlParameters() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const findbyid = urlParams.get('findbyid');
-  
+  const findbyid = new URLSearchParams(window.location.search).get('findbyid');
   if (findbyid) {
-    // Auto-execute /findbyid command
-    console.log('Auto-executing /findbyid command for note:', findbyid);
     addMsg(`Auto-finding note ID: ${findbyid}`, 'sys');
-    
-    // Send the command to the backend
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: 'chat',
-        text: `/findbyid ${findbyid}`,
-        lang: Settings.lang,
-        autoConfirm: Settings.autoConfirm
-      }));
-    } else {
-      // If WebSocket is not ready, wait a bit and try again
-      setTimeout(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
-            type: 'chat',
-            text: `/findbyid ${findbyid}`,
-            lang: Settings.lang,
-            autoConfirm: Settings.autoConfirm
-          }));
-        }
-      }, 1000);
-    }
+    sendToWorker({ type: 'chat', text: `/findbyid ${findbyid}`, lang: Settings.lang, autoConfirm: true });
   }
 }
-
-// Reconnect when returning to the tab
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    // User returned to the tab, check if we need to reconnect
-    if (!ws || ws.readyState === WebSocket.CLOSED) {
-      addMsg("👋 Welcome back! Reconnecting...", "sys");
-      connect();
-    }
-  }
-});
 
 /* ---------- Thinking Indicator ---------- */
-let thinkingInterval = null;
-let thinkingDots = 0;
-let thinkingMsg = null;
-
+let thinkingInterval = null, thinkingDots = 0, thinkingMsg = null;
 function showThinkingIndicator() {
-  // If already showing, don't create another
   if (thinkingMsg) return;
-  
-  // Create thinking message element
-  thinkingMsg = document.createElement("div");
+  thinkingMsg = document.createElement('div');
   thinkingMsg.className = "msg bot";
-  
-  // Create message content
-  const messageContent = document.createElement("div");
-  messageContent.className = "msg-content";
-  messageContent.textContent = "Thinking";
-  
-  // Create timestamp
-  const timestamp = document.createElement("div");
-  timestamp.className = "msg-timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
-  
-  // Add content and timestamp to message
-  thinkingMsg.appendChild(messageContent);
-  thinkingMsg.appendChild(timestamp);
-  
-  // Add to log
+  const mc = document.createElement("div");
+  mc.className = "msg-content";
+  mc.textContent = "Thinking";
+  thinkingMsg.appendChild(mc);
   logEl.appendChild(thinkingMsg);
-  
-  // Start animation
-  thinkingInterval = setInterval(() => {
-    thinkingDots = (thinkingDots + 1) % 4;
-    messageContent.textContent = "Thinking" + ".".repeat(thinkingDots);
-  }, 500);
-  
+  thinkingInterval = setInterval(() => { mc.textContent = "Thinking" + ".".repeat((++thinkingDots) % 4); }, 500);
   scrollToBottom();
 }
-
 function hideThinkingIndicator() {
-  // Stop animation
-  if (thinkingInterval) {
-    clearInterval(thinkingInterval);
-    thinkingInterval = null;
-  }
-  
-  // Remove thinking message if it exists
-  if (thinkingMsg && thinkingMsg.parentNode) {
-    thinkingMsg.parentNode.removeChild(thinkingMsg);
-    thinkingMsg = null;
-  }
-  
-  // Reset dots counter
-  thinkingDots = 0;
+  if (thinkingInterval) clearInterval(thinkingInterval);
+  thinkingInterval = null;
+  if (thinkingMsg) thinkingMsg.remove();
+  thinkingMsg = null;
 }
 
 /* ---------- Utilities ---------- */
-// Replace the existing addMsg function with this enhanced version
 function addMsg(text, who) {
   const div = document.createElement("div");
-  div.className = "msg " + (who === "you" ? "you" : who === "bot" ? "bot" : "sys");
-  
-  // Create message content with timestamp
-  const messageContent = document.createElement("div");
-  messageContent.className = "msg-content";
-  
-  // Convert URLs to clickable links
-  const linkedText = linkifyText(text);
-  messageContent.innerHTML = linkedText; // Use innerHTML to render links
-  
-  // Create timestamp
-  const timestamp = document.createElement("div");
-  timestamp.className = "msg-timestamp";
-  timestamp.textContent = formatTimestamp(new Date());
-  
-  // Add content and timestamp to message
-  div.appendChild(messageContent);
-  div.appendChild(timestamp);
-  
+  div.className = "msg " + who;
+  const mc = document.createElement("div");
+  mc.className = "msg-content";
+  mc.innerHTML = linkifyText(text);
+  div.appendChild(mc);
   logEl.appendChild(div);
-  
-  // Save message to chat history
   saveMessageToHistory(text, who);
-  
-  // Speak bot responses if TTS is enabled
-  if (who === "bot" && useTTS.checked) {
-    speakText(text);
-  }
-  
+  if (who === "bot" && useTTS.checked) speakText(text);
   scrollToBottom();
 }
 
-// Helper function to convert URLs in text to clickable links
 function linkifyText(text) {
-  // Escape HTML to prevent XSS attacks
-  const escapeHtml = (str) => {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  };
-  
-  // Escape the text first
-  let escapedText = escapeHtml(text);
-  
-  // URL regex pattern that matches http://, https://, and www. URLs
-  const urlPattern = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/gi;
-  
-  // Replace URLs with clickable links
-  const linkedText = escapedText.replace(urlPattern, (url) => {
-    // Add https:// if URL starts with www.
+  const u = (s) => s.replace(/[&<]/g, c => c === '&' ? '&amp;' : '&lt;');
+  return u(text).replace(/(https?:\[^\s]+)|(www\[^\s]+)/gi, (url) => {
     const href = url.startsWith('www.') ? 'https://' + url : url;
-    
-    // Create a clickable link that opens in a new tab
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #4a9eff; text-decoration: underline;">${url}</a>`;
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
   });
-  
-  return linkedText;
 }
 
 function scrollToBottom(){ logEl.scrollTop = logEl.scrollHeight; }
 
-// Format timestamp for display (like WhatsApp)
-function formatTimestamp(date) {
-  const now = new Date();
-  const messageDate = new Date(date);
-  
-  // Check if it's today
-  if (messageDate.toDateString() === now.toDateString()) {
-    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  
-  // Check if it's yesterday
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (messageDate.toDateString() === yesterday.toDateString()) {
-    return "Yesterday " + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  
-  // Check if it's this week
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  if (messageDate > weekAgo) {
-    return messageDate.toLocaleDateString([], { weekday: 'short' }) + " " + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  
-  // Older messages show date and time
-  return messageDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + " " + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-// -------- Chat History Management --------
 function saveMessageToHistory(text, who) {
-  const message = {
-    text: text,
-    who: who,
-    timestamp: new Date().toISOString()
-  };
-  
-  // Get existing chat history
-  let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-  
-  // Add new message
-  chatHistory.push(message);
-  
-  // Keep only last 100 messages to prevent localStorage from getting too large
-  if (chatHistory.length > 100) {
-    chatHistory = chatHistory.slice(-100);
-  }
-  
-  // Save to localStorage
-  localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+  let h = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+  h.push({ text, who, timestamp: new Date().toISOString() });
+  if (h.length > 100) h = h.slice(-100);
+  localStorage.setItem('chatHistory', JSON.stringify(h));
 }
 
 function loadChatHistory() {
-  const chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-  
-  // Clear current chat log
+  const h = JSON.parse(localStorage.getItem('chatHistory') || '[]');
   logEl.innerHTML = '';
-  
-  // Restore all messages with timestamps
-  chatHistory.forEach(message => {
-    const div = document.createElement("div");
-    div.className = "msg " + (message.who === "you" ? "you" : message.who === "bot" ? "bot" : "sys");
-    
-    // Create message content
-    const messageContent = document.createElement("div");
-    messageContent.className = "msg-content";
-    messageContent.textContent = message.text;
-    
-    // Create timestamp from stored timestamp
-    const timestamp = document.createElement("div");
-    timestamp.className = "msg-timestamp";
-    timestamp.textContent = formatTimestamp(new Date(message.timestamp));
-    
-    // Add content and timestamp to message
-    div.appendChild(messageContent);
-    div.appendChild(timestamp);
-    
-    logEl.appendChild(div);
-  });
-  
-  // Scroll to bottom
-  scrollToBottom();
+  h.forEach(m => addMsg(m.text, m.who));
 }
 
 function clearChatHistory() {
@@ -1276,418 +660,72 @@ function clearChatHistory() {
   logEl.innerHTML = '';
 }
 
-// Initialize settings on page load
 function initializeSettings() {
-  // Load stored API key
-  const storedKey = localStorage.getItem('geminiApiKey');
-  if (storedKey) {
-    Settings.geminiApiKey = storedKey;
-  }
-  
-  // Load chat history
+  const key = localStorage.getItem('geminiApiKey');
+  if (key) Settings.geminiApiKey = key;
   loadChatHistory();
 }
 
-// Hide tip section after 10 seconds
 function hideTipAfterDelay() {
-  const tipSection = document.getElementById('tipSection');
-  if (tipSection) {
-    setTimeout(() => {
-      tipSection.style.display = 'none';
-    }, 10000); // 10 seconds
-  }
+  const tip = document.getElementById('tipSection');
+  if (tip) setTimeout(() => { tip.style.display = 'none'; }, 10000);
 }
 
-// Connect to DroidScript backend on page load
+/* ---------- Page Load ---------- */
 initializeSettings();
 loadCommandHistory();
-// Initialize connection LED as disconnected
-updateConnectionStatus(false);
-connect();
+initializeServiceWorker();
 hideTipAfterDelay();
 
-/* ---------- Upload Modal Functionality ---------- */
-// DEPRECATED: HTML upload modal no longer used
-// All image uploads now handled natively in DroidScript
+/* ---------- Upload Modal ---------- */
 function showUploadModal(noteId) {
   currentNoteId = noteId;
   document.getElementById('uploadModal').classList.add('show');
-  
-  // Setup file input handler
-  const fileInput = document.getElementById('fileInput');
-  fileInput.onchange = handleFileSelect;
-  
-  // Also add event listener for better compatibility
-  fileInput.addEventListener('change', handleFileSelect);
-  
-  // Setup drag and drop
-  const uploadArea = document.querySelector('.upload-area');
-  uploadArea.ondragover = (e) => {
-    e.preventDefault();
-    uploadArea.classList.add('dragover');
-  };
-  uploadArea.ondragleave = () => {
-    uploadArea.classList.remove('dragover');
-  };
-  uploadArea.ondrop = (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('dragover');
-    handleFileSelect({ target: { files: e.dataTransfer.files } });
-  };
+  document.getElementById('fileInput').onchange = handleFileSelect;
 }
-
-// Select images function - WebView-compatible approach
-function selectImages() {
-  console.log("DEBUG: selectImages called");
-  console.log("DEBUG: Current selectedFiles length:", selectedFiles.length);
-  console.log("DEBUG: User agent:", navigator.userAgent);
-  
-  // Check if we're in a WebView environment
-  const isWebView = navigator.userAgent.includes('wv') || window.AndroidInterface;
-  console.log("DEBUG: Detected WebView environment:", isWebView);
-  
-  // Try to trigger the hidden file input directly
-  const fileInput = document.getElementById('fileInput');
-  if (fileInput) {
-    console.log("DEBUG: Found file input, triggering HTML file picker");
-    console.log("DEBUG: File input current value:", fileInput.value);
-    
-    // Clear any previous selection
-    fileInput.value = '';
-    console.log("DEBUG: Cleared file input value");
-    
-    // Multiple event listeners for WebView compatibility
-    const handleFileChange = function(event) {
-      console.log("DEBUG: File input change event triggered in selectImages");
-      console.log("DEBUG: Event files length:", event.target.files ? event.target.files.length : 'no files');
-      if (event.target.files && event.target.files.length > 0) {
-        handleFileSelect(event);
-      }
-      // Remove the event listener after use
-      fileInput.removeEventListener('change', handleFileChange);
-      fileInput.removeEventListener('input', handleFileChange);
-    };
-    
-    // Add multiple event listeners for better WebView compatibility
-    fileInput.addEventListener('change', handleFileChange);
-    fileInput.addEventListener('input', handleFileChange);  // Alternative event for WebView
-    
-    // Also try focus/blur events as some WebViews use these
-    const handleFocusEvents = function() {
-      console.log("DEBUG: File input focus/blur event - checking for files");
-      setTimeout(() => {
-        if (fileInput.files && fileInput.files.length > 0) {
-          console.log("DEBUG: Files detected via focus/blur check");
-          handleFileSelect({ target: fileInput });
-        }
-      }, 100);
-    };
-    
-    fileInput.addEventListener('focus', handleFocusEvents);
-    fileInput.addEventListener('blur', handleFocusEvents);
-    
-    console.log("DEBUG: Added multiple event listeners, about to click file input");
-    fileInput.click();
-    console.log("DEBUG: File input clicked");
-    
-    // WebView-specific polling mechanism
-    let pollCount = 0;
-    const maxPolls = 30; // Poll for 3 seconds
-    const pollInterval = setInterval(() => {
-      pollCount++;
-      console.log("DEBUG: Polling for files, attempt:", pollCount);
-      
-      if (fileInput.files && fileInput.files.length > 0) {
-        console.log("DEBUG: Files detected via polling:", fileInput.files.length);
-        clearInterval(pollInterval);
-        handleFileSelect({ target: fileInput });
-        return;
-      }
-      
-      if (pollCount >= maxPolls) {
-        console.log("DEBUG: Polling timeout reached, no files detected");
-        clearInterval(pollInterval);
-        // Clean up event listeners
-        fileInput.removeEventListener('change', handleFileChange);
-        fileInput.removeEventListener('input', handleFileChange);
-        fileInput.removeEventListener('focus', handleFocusEvents);
-        fileInput.removeEventListener('blur', handleFocusEvents);
-        
-        if (selectedFiles.length === 0) {
-          console.log("DEBUG: No files selected after polling, showing fallback options");
-          showWebViewFilePickerFallback();
-        }
-      }
-    }, 100);
-    
-  } else {
-    console.log("DEBUG: File input not found, using native picker");
-    selectImagesNative();
-  }
-}
-
-
-
-// Close upload modal
-function closeUploadModal() {
-  document.getElementById('uploadModal').classList.remove('show');
-  currentNoteId = null;
-  selectedFiles = [];
-}
-
-// Handle file selection
+function closeUploadModal() { document.getElementById('uploadModal').classList.remove('show'); }
+function selectImages() { document.getElementById('fileInput').click(); }
 function handleFileSelect(event) {
-  console.log("DEBUG: handleFileSelect called");
-  console.log("DEBUG: Event:", event);
-  console.log("DEBUG: Event target:", event.target);
-  console.log("DEBUG: Event target files:", event.target.files);
-  console.log("DEBUG: Files length:", event.target.files ? event.target.files.length : 'no files');
-  
-  if (!event.target.files || event.target.files.length === 0) {
-    console.log("DEBUG: No files in event, returning early");
-    return;
-  }
-  
-  const files = Array.from(event.target.files);
-  console.log("DEBUG: Files array:", files);
-  console.log("DEBUG: Files array length:", files.length);
-  
-  // Filter for images only and limit to 5
-  const imageFiles = files.filter(file => {
-    console.log("DEBUG: Checking file:", file.name, "type:", file.type);
-    return file.type.startsWith('image/');
-  });
-  console.log("DEBUG: Filtered to", imageFiles.length, "image files");
-  
-  if (imageFiles.length > 5) {
-    addMsg("⚠️ Maximum 5 images allowed", "sys");
-    imageFiles.splice(5);
-  }
-  
-  selectedFiles = imageFiles;
-  console.log("DEBUG: selectedFiles updated to", selectedFiles.length, "files");
-  console.log("DEBUG: selectedFiles content:", selectedFiles);
-  
-  updatePreview();
-  
-  const uploadBtn = document.getElementById('uploadBtn');
-  if (uploadBtn) {
-    uploadBtn.disabled = selectedFiles.length === 0;
-    console.log("DEBUG: Upload button disabled:", uploadBtn.disabled);
-  }
-  
-  if (selectedFiles.length > 0) {
-    console.log("DEBUG: Adding success message for", selectedFiles.length, "files");
-    addMsg(`📷 ${selectedFiles.length} image(s) selected`, "sys");
-  } else {
-    console.log("DEBUG: No image files selected");
-    addMsg("📷 No valid image files selected", "sys");
-  }
-}
-
-// Update preview container
-function updatePreview() {
-  const container = document.getElementById('previewContainer');
-  const uploadBtn = document.getElementById('uploadBtn');
-  
-  if (selectedFiles.length === 0) {
-    container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No images selected</p>';
-    uploadBtn.disabled = true;
-    return;
-  }
-  
-  // Simple display: just show count and file names
-  const fileCount = selectedFiles.length;
-  const fileNames = selectedFiles.map(file => file.name).join(', ');
-  
-  container.innerHTML = `
-    <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px; margin: 10px 0;">
-      <h3 style="margin: 0 0 10px 0; color: #333;">📸 Selected ${fileCount} picture${fileCount > 1 ? 's' : ''}</h3>
-      <p style="color: #666; font-size: 14px; margin: 10px 0; word-break: break-all;">${fileNames}</p>
-      <button onclick="clearSelectedFiles()" style="background: #ff4444; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;">Clear Selection</button>
-    </div>
-  `;
-  
-  uploadBtn.disabled = false;
-}
-
-// Remove file from selection
-function removeFile(index) {
-  selectedFiles.splice(index, 1);
+  if (!event.target.files) return;
+  selectedFiles = Array.from(event.target.files).filter(f => f.type.startsWith('image/')).slice(0, 5);
   updatePreview();
   document.getElementById('uploadBtn').disabled = selectedFiles.length === 0;
 }
-
-// Clear all selected files
-function clearSelectedFiles() {
-  selectedFiles = [];
-  updatePreview();
-  addMsg("📷 File selection cleared", "sys");
-}
-
-// Create mock file selection for testing/fallback
-function createMockFileSelection() {
-  console.log("DEBUG: Creating mock file selection");
-  
-  // Create a more realistic mock file object
-  const mockFile = {
-    name: 'mock_image_' + Date.now() + '.jpg',
-    type: 'image/jpeg',
-    size: 1024 * 50, // 50KB
-    lastModified: Date.now(),
-    lastModifiedDate: new Date(),
-    webkitRelativePath: '',
-    // Add methods that might be called
-    stream: function() { return new ReadableStream(); },
-    text: function() { return Promise.resolve('mock file content'); },
-    arrayBuffer: function() { return Promise.resolve(new ArrayBuffer(1024)); },
-    slice: function(start, end, contentType) { 
-      return new Blob(['mock'], { type: contentType || this.type }); 
-    },
-    // Mark as mock for special handling
-    isMockFile: true,
-    constructor: { name: 'File' }
-  };
-  
-  console.log("DEBUG: Created mock file:", mockFile.name);
-  
-  // Simulate file selection
-  selectedFiles = [mockFile];
-  console.log("DEBUG: Mock file added to selectedFiles");
-  
-  // Update the preview and enable upload button
-  updatePreview();
-  
-  const uploadBtn = document.getElementById('uploadBtn');
-  if (uploadBtn) {
-    uploadBtn.disabled = false;
-    console.log("DEBUG: Upload button enabled for mock file");
-  }
-  
-  // Show success message
-  addMsg("🧪 Mock file selected: " + mockFile.name, "sys");
-  addMsg("📷 1 image selected (mock file for testing)", "sys");
-}
-
-function uploadImages() {
+function updatePreview() {
+  const c = document.getElementById('previewContainer');
+  const b = document.getElementById('uploadBtn');
   if (selectedFiles.length === 0) {
-    addMsg("❌ No files selected.", "sys");
+    c.innerHTML = '<p>No images selected</p>';
+    b.disabled = true;
     return;
   }
-  if (!currentNoteId) {
-    addMsg("❌ No note selected for upload.", "sys");
-    return;
-  }
-
+  c.innerHTML = `<p>Selected ${selectedFiles.length} image(s)</p>`;
+  b.disabled = false;
+}
+function uploadImages() {
+  if (selectedFiles.length === 0 || !currentNoteId) return;
   addMsg(`📤 Uploading ${selectedFiles.length} image(s)...`, "sys");
-
-  let uploadedCount = 0;
-  const totalFiles = selectedFiles.length;
-
   selectedFiles.forEach(file => {
-    resizeAndCompressImage(file, (base64Data) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        const message = {
-          type: 'image_upload',
-          noteId: currentNoteId,
-          imageName: file.name,
-          imageData: base64Data
-        };
-        addMsg('DEBUG: Sending image upload message: ' + JSON.stringify(message).substring(0, 100) + '...', 'sys');
-        ws.send(JSON.stringify(message));
-
-        uploadedCount++;
-        if (uploadedCount === totalFiles) {
-          closeUploadModal();
-        }
-      }
+    resizeAndCompressImage(file, (base64) => {
+      sendToWorker({ type: 'image_upload', noteId: currentNoteId, imageName: file.name, imageData: base64 });
     });
   });
+  closeUploadModal();
 }
-
-// Image resizing and compression function
 function resizeAndCompressImage(file, callback) {
-  console.log("DEBUG: Resizing image:", file.name, "Size:", file.size, "bytes");
-  
-  // Check if this is a mock file
-  if (file.name && (file.name.startsWith('debug_image') || file.name.startsWith('test_image'))) {
-    console.log("DEBUG: Mock file detected, using mock base64 data");
-    // Use a small mock base64 image (1x1 transparent PNG)
-    const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-    callback(mockBase64);
-    return;
-  }
-  
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  const img = new Image();
-  
-  img.onload = function() {
-    console.log("DEBUG: Original image dimensions:", img.width, "x", img.height);
-    
-    // Calculate new dimensions (max 800px width, maintain aspect ratio)
-    const maxWidth = 800;
-    const maxHeight = 600;
-    let { width, height } = img;
-    
-    if (width > maxWidth) {
-      height = (height * maxWidth) / width;
-      width = maxWidth;
-    }
-    if (height > maxHeight) {
-      width = (width * maxHeight) / height;
-      height = maxHeight;
-    }
-    
-    console.log("DEBUG: Resized dimensions:", width, "x", height);
-    
-    // Set canvas size
-    canvas.width = width;
-    canvas.height = height;
-    
-    // Draw resized image
-    ctx.drawImage(img, 0, 0, width, height);
-    
-    // Convert to base64 with compression (0.8 quality)
-    const resizedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-    
-    console.log("DEBUG: Resized image size:", resizedBase64.length, "characters");
-    console.log("DEBUG: Compression ratio:", Math.round((1 - resizedBase64.length / (file.size * 1.33)) * 100) + "%");
-    
-    callback(resizedBase64);
+  const i = new Image(), c = document.createElement('canvas'), x = c.getContext('2d');
+  i.onload = () => {
+    let w = i.width, h = i.height;
+    if (w > 800) { h = h * 800 / w; w = 800; }
+    if (h > 600) { w = w * 600 / h; h = 600; }
+    c.width = w; c.height = h;
+    x.drawImage(i, 0, 0, w, h);
+    callback(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
   };
-  
-  img.onerror = function() {
-    console.log("DEBUG: Error loading image, using original file");
-    // Fallback to original file
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const base64Data = e.target.result.split(',')[1];
-      callback(base64Data);
-    };
-    reader.onerror = function(e) {
-      console.log("DEBUG: FileReader error, using mock data");
-      // Final fallback to mock data
-      const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-      callback(mockBase64);
-    };
-    reader.readAsDataURL(file);
-  };
-  
-  // Load the image
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    img.src = e.target.result;
-  };
-  reader.onerror = function(e) {
-    console.log("DEBUG: FileReader error loading file, using mock data");
-    const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-    callback(mockBase64);
-  };
-  reader.readAsDataURL(file);
+  const r = new FileReader();
+  r.onload = (e) => { i.src = e.target.result; };
+  r.readAsDataURL(file);
 }
-
-
 </script>
 </body>
 </html>

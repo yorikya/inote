@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Settings – Note Secretary</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body { padding: 20px; background: #0b0d10; color: #e6e6e6; font-family: system-ui, Arial, sans-serif; }
+  h1 { border-bottom: 1px solid #333; padding-bottom: 10px; }
+  .connection-status { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+  .connection-led { width: 12px; height: 12px; border-radius: 50%; background-color: #cc3333; transition: background-color 0.3s; }
+  .connection-led.connected { background-color: #33cc33; }
+  button { padding: 10px 15px; border: 1px solid #444; background: #2a2f36; color: #e6e6e6; border-radius: 5px; cursor: pointer; }
+  button:hover { background: #1f6feb; }
+</style>
+</head>
+<body>
+  <h1>Settings</h1>
+  <div class="connection-status">
+      <span class="connection-led" id="statusLed"></span>
+      <span id="statusText">Connecting...</span>
+  </div>
+  <p>This is the settings page. It shares the same WebSocket connection as the other pages.</p>
+  
+  <div>
+    <button onclick="window.location.href='index.html'">Chat</button>
+    <button onclick="window.location.href='explorer.html'">Explorer</button>
+  </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  if (!('serviceWorker' in navigator)) {
+    alert('Service Workers are not supported.');
+    return;
+  }
+
+  const statusLed = document.getElementById('statusLed');
+  const statusText = document.getElementById('statusText');
+
+  function updateConnectionStatus(connected) {
+    if (connected) {
+      statusLed.classList.add('connected');
+      statusText.textContent = 'Connected';
+    } else {
+      statusLed.classList.remove('connected');
+      statusText.textContent = 'Disconnected';
+    }
+  }
+
+  navigator.serviceWorker.register('./service-worker.js').then(reg => {
+      console.log('Service Worker registered.');
+      if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
+      }
+  }).catch(err => console.error('SW registration failed:', err));
+
+  navigator.serviceWorker.addEventListener('message', event => {
+      try {
+          const message = JSON.parse(event.data);
+          console.log('Received from worker:', message);
+          switch (message.type) {
+              case 'ws_open': updateConnectionStatus(true); break;
+              case 'ws_close': updateConnectionStatus(false); break;
+              case 'ws_error': updateConnectionStatus(false); break;
+          }
+      } catch (e) {}
+  });
+});
+</script>
+</body>
+</html>
