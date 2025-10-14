@@ -833,6 +833,14 @@ function connect() {
             addMsg('No notes have been found', 'bot');
           }
         }
+        else if(msg.type==='thinking') {
+          // Show thinking indicator
+          showThinkingIndicator();
+        }
+        else if(msg.type==='thinking_done') {
+          // Hide thinking indicator
+          hideThinkingIndicator();
+        }
         else {
           console.log("DEBUG: Unhandled message type:", msg.type);
           addMsg(ev.data,'sys');
@@ -1058,6 +1066,62 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
+
+/* ---------- Thinking Indicator ---------- */
+let thinkingInterval = null;
+let thinkingDots = 0;
+let thinkingMsg = null;
+
+function showThinkingIndicator() {
+  // If already showing, don't create another
+  if (thinkingMsg) return;
+  
+  // Create thinking message element
+  thinkingMsg = document.createElement("div");
+  thinkingMsg.className = "msg bot";
+  
+  // Create message content
+  const messageContent = document.createElement("div");
+  messageContent.className = "msg-content";
+  messageContent.textContent = "Thinking";
+  
+  // Create timestamp
+  const timestamp = document.createElement("div");
+  timestamp.className = "msg-timestamp";
+  timestamp.textContent = formatTimestamp(new Date());
+  
+  // Add content and timestamp to message
+  thinkingMsg.appendChild(messageContent);
+  thinkingMsg.appendChild(timestamp);
+  
+  // Add to log
+  logEl.appendChild(thinkingMsg);
+  
+  // Start animation
+  thinkingInterval = setInterval(() => {
+    thinkingDots = (thinkingDots + 1) % 4;
+    messageContent.textContent = "Thinking" + ".".repeat(thinkingDots);
+  }, 500);
+  
+  scrollToBottom();
+}
+
+function hideThinkingIndicator() {
+  // Stop animation
+  if (thinkingInterval) {
+    clearInterval(thinkingInterval);
+    thinkingInterval = null;
+  }
+  
+  // Remove thinking message if it exists
+  if (thinkingMsg && thinkingMsg.parentNode) {
+    thinkingMsg.parentNode.removeChild(thinkingMsg);
+    thinkingMsg = null;
+  }
+  
+  // Reset dots counter
+  thinkingDots = 0;
+}
 
 /* ---------- Utilities ---------- */
 // Replace the existing addMsg function with this enhanced version
