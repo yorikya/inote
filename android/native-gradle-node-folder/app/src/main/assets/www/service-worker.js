@@ -1,14 +1,21 @@
 let ws;
-const wsUrl = 'ws://localhost:30000';
+// Use the hostname of the service worker to construct the WebSocket URL.
+const wsUrl = `ws://${self.location.hostname}:30000`;
+console.log(`[ServiceWorker] WebSocket URL: ${wsUrl}`);
+
 let reconnectInterval = 3000;
 let reconnectTimer = null;
 
 function connect() {
+    console.log('[ServiceWorker] Attempting to connect...');
     if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
     }
-    if (ws && ws.readyState !== WebSocket.CLOSED) return;
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        console.log('[ServiceWorker] WebSocket already open or connecting.');
+        return;
+    }
 
     ws = new WebSocket(wsUrl);
 
@@ -21,11 +28,12 @@ function connect() {
         broadcast(event.data, true);
     };
 
-    ws.onclose = () => {
-        console.log('[ServiceWorker] WebSocket disconnected');
+    ws.onclose = (event) => {
+        console.log(`[ServiceWorker] WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`);
         ws = null;
         broadcast({ type: 'ws_close' });
         if (!reconnectTimer) {
+            console.log('[ServiceWorker] Scheduling reconnect...');
             reconnectTimer = setTimeout(connect, reconnectInterval);
         }
     };
@@ -48,10 +56,12 @@ async function broadcast(message, isRaw = false) {
 }
 
 self.addEventListener('install', (event) => {
+    console.log('[ServiceWorker] Installing...');
     event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {
+    console.log('[ServiceWorker] Activating...');
     event.waitUntil(self.clients.claim());
     connect();
 });
