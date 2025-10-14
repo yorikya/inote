@@ -70,6 +70,8 @@ self.addEventListener('message', (event) => {
     if (event.data === 'REQUEST_WS_STATUS') {
         if (ws && ws.readyState === WebSocket.OPEN) {
             broadcast({ type: 'ws_open' });
+        } else {
+            connect();
         }
         return;
     }

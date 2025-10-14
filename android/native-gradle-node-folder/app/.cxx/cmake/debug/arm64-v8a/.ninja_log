@@ -16,3 +16,9 @@
 0	9	0	clean	ba19e04dc871e5d0
 1	492	1760131575	CMakeFiles/native-lib.dir/src/main/cpp/native-lib.cpp.o	30d7881d35e19241
 492	658	1760131575	../../../../build/intermediates/cmake/debug/obj/arm64-v8a/libnative-lib.so	c78d8aca768c767b
+0	9	0	clean	ba19e04dc871e5d0
+1	549	1760458522	CMakeFiles/native-lib.dir/src/main/cpp/native-lib.cpp.o	30d7881d35e19241
+549	707	1760458522	../../../../build/intermediates/cmake/debug/obj/arm64-v8a/libnative-lib.so	c78d8aca768c767b
+0	11	0	clean	ba19e04dc871e5d0
+1	498	1760458829	CMakeFiles/native-lib.dir/src/main/cpp/native-lib.cpp.o	30d7881d35e19241
+498	654	1760458830	../../../../build/intermediates/cmake/debug/obj/arm64-v8a/libnative-lib.so	c78d8aca768c767b
