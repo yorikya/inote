@@ -172,7 +172,7 @@ function formatNoteTree(note, children) {
   }
   
   // Add status indicator
-  result += note.is_done ? ' ✅' : ' ⏳';
+  result += note.done ? ' ✅' : ' ⏳';
 
   // Add description preview if exists
   if (note.description && note.description.trim()) {
@@ -195,7 +195,7 @@ function formatNoteTree(note, children) {
     result += `\n   📋 Sub-notes (${children.length}):`;
     children.forEach((child, index) => {
       result += `\n      ${index + 1}. ${child.title} 🔗ID: ${child.id}`;
-      result += child.is_done ? ' ✅' : ' ⏳';
+      result += child.done ? ' ✅' : ' ⏳';
 
       // Add description preview for child if exists
       if (child.description && child.description.trim()) {
@@ -216,9 +216,11 @@ function handleCreateNoteCommand(ws, parsed, autoConfirm) {
     const newNote = NoteManager.create(noteTitle);
     send(ws, { type: 'created_note', note: newNote });
     const tree = formatNoteTree(newNote, []);
-    send(ws, { type: 'reply', text: `✅ Note created successfully!
+    send(ws, { type: 'reply', text: `✨ New note created:
 
-${tree}` });
+${tree}
+
+🤔 What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai)` });
   } else {
     StateManager.setState(ws, {
       mode: 'pending_confirmation',
@@ -246,7 +248,7 @@ function handleFindNoteCommand(ws, parsed) {
     let noteList = `✨ Found ${notes.length} notes:\n\n`;
     notes.forEach((note, index) => {
       noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
-      if (note.is_done) {
+      if (note.done) {
         noteList += ' ✅';
       }
       noteList += '\n';
@@ -286,7 +288,12 @@ function handleShowParentsCommand(ws) {
     parentNotes.forEach((note, index) => {
       const children = NoteManager.findChildren(note.id);
       const tree = formatNoteTree(note, children);
-      noteList += `${index + 1}. ${tree}\n\n`;
+      noteList += `${index + 1}. ${tree}`;
+      
+      // Add separator line between notes (but not after the last one)
+      if (index < parentNotes.length - 1) {
+        noteList += `\n------------------------------\n`;
+      }
     });
     send(ws, { type: 'reply', text: noteList });
   }
