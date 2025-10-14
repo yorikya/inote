@@ -164,22 +164,25 @@ function formatNoteTree(note, children) {
   let result = '';
   
   // Format parent note with icon and styling
-  result += `📝 ${note.title} (ID: ${note.id})`;
+  result += `📝 ${note.title} 🔗ID: ${note.id}`;
   
   // Add parent indicator if it's a parent note
   if (!note.parent_id) {
-    result += ' [Parent]';
+    result += ' 📂';
   }
   
-  // Add description if exists
+  // Add status indicator
+  result += note.is_done ? ' ✅' : ' ⏳';
+
+  // Add description preview if exists
   if (note.description && note.description.trim()) {
-    result += `\n   💬 ${note.description}`;
+    const preview = note.description.length > 50 
+      ? note.description.substring(0, 50) + '...' 
+      : note.description;
+    result += `\n   [${preview}]`;
   }
   
-  // Add status if marked as done
-  if (note.is_done) {
-    result += '\n   ✅ Completed';
-  }
+  // Status indicator already added above
   
   // Add image count if any
   const imageCount = ImageManager.getNoteImages(note.id).length;
@@ -191,9 +194,15 @@ function formatNoteTree(note, children) {
   if (children && children.length > 0) {
     result += `\n   📋 Sub-notes (${children.length}):`;
     children.forEach((child, index) => {
-      result += `\n      ${index + 1}. ${child.title} (ID: ${child.id})`;
-      if (child.is_done) {
-        result += ' ✅';
+      result += `\n      ${index + 1}. ${child.title} 🔗ID: ${child.id}`;
+      result += child.is_done ? ' ✅' : ' ⏳';
+
+      // Add description preview for child if exists
+      if (child.description && child.description.trim()) {
+        const preview = child.description.length > 50 
+          ? child.description.substring(0, 50) + '...' 
+          : child.description;
+        result += `\n         [${preview}]`;
       }
     });
   }
@@ -206,14 +215,17 @@ function handleCreateNoteCommand(ws, parsed, autoConfirm) {
   if (autoConfirm || StateManager.getAutoConfirm(ws)) {
     const newNote = NoteManager.create(noteTitle);
     send(ws, { type: 'created_note', note: newNote });
-    send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
+    const tree = formatNoteTree(newNote, []);
+    send(ws, { type: 'reply', text: `✅ Note created successfully!
+
+${tree}` });
   } else {
     StateManager.setState(ws, {
       mode: 'pending_confirmation',
       pendingConfirmation: { action: 'create_note', data: { title: noteTitle } },
     });
     sendUpdatedCommands(ws);
-    send(ws, { type: 'reply', text: `Do you want to create a note with title '${noteTitle}'? (yes/no)` });
+    send(ws, { type: 'reply', text: `🤔 Do you want to create a note with title '${noteTitle}'? (yes/no)` });
   }
 }
 
@@ -272,15 +284,9 @@ function handleShowParentsCommand(ws) {
   } else {
     let noteList = `📚 Parent notes (${parentNotes.length}):\n\n`;
     parentNotes.forEach((note, index) => {
-      noteList += `${index + 1}. 📝 ${note.title} (ID: ${note.id})`;
-      if (note.is_done) {
-        noteList += ' ✅';
-      }
-      const childCount = NoteManager.findChildren(note.id).length;
-      if (childCount > 0) {
-        noteList += ` 📋 ${childCount}`;
-      }
-      noteList += '\n';
+      const children = NoteManager.findChildren(note.id);
+      const tree = formatNoteTree(note, children);
+      noteList += `${index + 1}. ${tree}\n\n`;
     });
     send(ws, { type: 'reply', text: noteList });
   }
@@ -323,7 +329,9 @@ async function handleConfirmationAction(ws, action, data, autoConfirm) {
     case 'create_note': {
       const newNote = NoteManager.create(data.title, data.description, data.parent_id);
       send(ws, { type: 'created_note', note: newNote });
-      send(ws, { type: 'reply', text: `Note '${newNote.title}' (ID: ${newNote.id}) created successfully!` });
+      const children = NoteManager.findChildren(newNote.id);
+      const tree = formatNoteTree(newNote, children);
+      send(ws, { type: 'reply', text: `✅ Note created successfully!\n\n${tree}` });
       
       // Set context for newly created note
       StateManager.setState(ws, {
@@ -331,7 +339,7 @@ async function handleConfirmationAction(ws, action, data, autoConfirm) {
         findContext: { selectedNote: newNote, results: [newNote] }
       });
       
-      const followUpText = `What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai)`;
+      const followUpText = `🤔 What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai)`;
       
       send(ws, { type: 'reply', text: followUpText });
       sendUpdatedCommands(ws);
@@ -601,7 +609,7 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         },
       });
       sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Are you sure you want to delete note '${noteToDelete.title}' (ID: ${noteToDelete.id})? (yes/no)` });
+      send(ws, { type: 'reply', text: `🗑️ Are you sure you want to delete note '${noteToDelete.title}' 🔗ID: ${noteToDelete.id}? (yes/no)` });
       return true;
       
     case '/editdescription':
@@ -619,7 +627,7 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       } else {
         StateManager.setState(ws, { mode: 'story_editing', storyEditingNoteId: noteToEdit.id, descriptionBuffer: '' });
         sendUpdatedCommands(ws);
-        send(ws, { type: 'reply', text: `Editing description for '${noteToEdit.title}' (ID: ${noteToEdit.id}). Type your description. Say /stopediting when you are done.` });
+        send(ws, { type: 'reply', text: `📝 Editing description for '${noteToEdit.title}' 🔗ID: ${noteToEdit.id}. Type your description. Say /stopediting when you are done.` });
       }
       return true;
       
@@ -646,7 +654,7 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         },
       });
       sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToMark.title}' (ID: ${noteToMark.id}) as done? (yes/no)` });
+      send(ws, { type: 'reply', text: `✅ Are you sure you want to mark note '${noteToMark.title}' 🔗ID: ${noteToMark.id} as done? (yes/no)` });
       return true;
       
     case '/markpending':
@@ -673,7 +681,7 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         },
       });
       sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Are you sure you want to mark note '${noteToUnmark.title}' (ID: ${noteToUnmark.id}) as pending? (yes/no)` });
+      send(ws, { type: 'reply', text: `⏳ Are you sure you want to mark note '${noteToUnmark.title}' 🔗ID: ${noteToUnmark.id} as pending? (yes/no)` });
       return true;
       
     case '/talkai':
@@ -692,7 +700,7 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
       aiService.startConversation(noteContent);
       StateManager.setState(ws, { mode: 'ai_conversation', aiConversationNoteId: noteToTalk.id, findContext: state.findContext });
       sendUpdatedCommands(ws);
-      send(ws, { type: 'reply', text: `Starting AI conversation about '${noteToTalk.title}' (ID: ${noteToTalk.id}). To end the conversation, type /stoptalkai.` });
+      send(ws, { type: 'reply', text: `🤖 Starting AI conversation about '${noteToTalk.title}' 🔗ID: ${noteToTalk.id}. To end the conversation, type /stoptalkai.` });
       return true;
       
     case '/createsubnote':
@@ -707,7 +715,7 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         // Title is provided, create sub-note directly
         const newNote = NoteManager.create(subnoteTitle, '', parentNote.id);
         send(ws, { type: 'created_note', note: newNote });
-        send(ws, { type: 'reply', text: `Sub-note '${newNote.title}' (ID: ${newNote.id}) created under '${parentNote.title}' (ID: ${parentNote.id}).` });
+        send(ws, { type: 'reply', text: `📋 Sub-note '${newNote.title}' 🔗ID: ${newNote.id} created under '${parentNote.title}' 🔗ID: ${parentNote.id}.` });
       } else {
         // No title, ask for it
         StateManager.setState(ws, { mode: 'pending_subnote_creation', findContext: state.findContext });

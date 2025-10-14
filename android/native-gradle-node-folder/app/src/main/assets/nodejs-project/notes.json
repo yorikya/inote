@@ -104,9 +104,29 @@
       "images": [],
       "deleted": false,
       "creation_date": "2025-10-13T12:38:47.373Z"
+    },
+    {
+      "id": "11",
+      "title": "Testw",
+      "description": "",
+      "parent_id": "8",
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-14T08:16:17.989Z"
+    },
+    {
+      "id": "12",
+      "title": "tetstsh",
+      "description": "",
+      "parent_id": null,
+      "done": false,
+      "images": [],
+      "deleted": false,
+      "creation_date": "2025-10-14T08:18:43.746Z"
     }
   ],
-  "latestNoteId": 10,
+  "latestNoteId": 12,
   "settings": {
     "gemini_api_key": "AIzaSyCp7LuwtRwBuDDdTeC6RPjtLh2CH63vE-A"
   }
