@@ -143,6 +143,19 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
+const interval = setInterval(function ping() {
+  wss.clients.forEach(function each(ws) {
+    if (ws.isAlive === false) return ws.terminate();
+
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on('close', function close() {
+  clearInterval(interval);
+});
+
 wss.on('error', (error) => {
   console.error('WebSocket Server Error:', error);
 });
@@ -916,6 +929,12 @@ async function handleImageUpload(ws, o) {
 }
 
 wss.on('connection', (ws) => {
+  ws.isAlive = true;
+  ws.on('pong', function heartbeat() {
+    console.log('Pong received');
+    this.isAlive = true;
+  });
+
   console.log('Client connected');
   StateManager.initializeState(ws);
   sendUpdatedCommands(ws);

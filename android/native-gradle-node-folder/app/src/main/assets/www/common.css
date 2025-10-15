@@ -1,6 +1,8 @@
 
-body { 
-  margin: 0; 
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* Prevent body scrolling */
   font-family: system-ui, Arial, sans-serif; 
   background: #0b0d10; 
   color: #e6e6e6; 
@@ -9,7 +11,7 @@ body {
 .app { 
   display: flex; 
   flex-direction: column; 
-  height: 100dvh; 
+  height: 100%; 
   margin: 0 auto; 
 }
 

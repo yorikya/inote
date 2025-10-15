@@ -7,7 +7,12 @@ input, textarea, button { scroll-margin: 0; scroll-padding: 0; }
 
 /* Ensure consistent content dimensions to prevent layout shifts */
 #log { min-height: calc(100vh - 340px); }
-.contentArea { min-height: calc(100vh - 60px); }
+#contentArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Prevent this from scrolling, let #log scroll */
+}
 
 /* Prevent any automatic scrolling */
 html { scroll-behavior: auto !important; }
@@ -73,22 +78,27 @@ body { scroll-behavior: auto !important; }
   header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: #0b0d10; border-bottom: 1px solid #333; }
   header h1 { font-size:16px; }
   select, button, input[type="text"] { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:6px 10px; }
-  #log { flex:1; overflow-y:auto; overflow-x:hidden; padding:16px; padding-bottom: 160px; display:flex; flex-direction:column; gap:10px; margin-top: 60px; margin-bottom: 280px; height: calc(100vh - 340px); position: relative; scroll-behavior: smooth; overflow-anchor: none; }
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
   #log::-webkit-scrollbar { width: 8px; }
   #log::-webkit-scrollbar-track { background: #1a1a1a; border-radius: 4px; }
   #log::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
   #log::-webkit-scrollbar-thumb:hover { background: #555; }
-  .msg { max-width:85%; padding:10px 12px; border-radius:14px; line-height:1.35; white-space:pre-wrap; display:flex; flex-direction:column; gap:4px; }
-  .you { align-self:flex-end; background:#1f6feb; color:white; border-bottom-right-radius:4px; }
-  .bot { align-self:flex-start; background:#15181c; border:1px solid #2a2f36; border-bottom-left-radius:4px; }
-  .sys { align-self:center; font-size:12px; opacity:.8; }
-  .msg-content { flex:1; }
+  .msg { max-width:85%; padding:10px 12px; border-radius:14px; line-height:1.35; white-space:pre-wrap; margin-bottom:12px; clear:both; }
+  .you { float:right; background:#1f6feb; color:white; border-bottom-right-radius:4px; }
+  .bot { float:left; background:#15181c; border:1px solid #2a2f36; border-bottom-left-radius:4px; }
+  .sys { display:block; width:100%; text-align:center; font-size:12px; opacity:.8; margin-bottom:12px; clear:both; }
+  .msg-content { word-wrap:break-word; }
   
   /* Chat form fixed footer */
-  #chat { position: fixed; bottom: 0; left: 0; right: 0; background: #0b0d10; border-top: 1px solid #333; padding: 16px; z-index: 1000; }
+  #chat { background: #0b0d10; border-top: 1px solid #333; padding: 16px; }
   
   /* Input row with inline send button */
-  .input-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
+  .input-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
   .input-row textarea { flex: 1; min-height: 40px; max-height: 120px; resize: vertical; }
   .input-row button { flex-shrink: 0; }
   
@@ -96,14 +106,14 @@ body { scroll-behavior: auto !important; }
   .chat-controls { display: flex; gap: 8px; align-items: center; }
   .chat-controls button { margin: 0; }
   .chat-controls label { display: flex; align-items: center; gap: 4px; margin: 0; }
-  .msg-timestamp { font-size:10px; opacity:0.7; text-align:right; margin-top:2px; }
-  .you .msg-timestamp { color:rgba(255,255,255,0.8); }
-  .bot .msg-timestamp { color:#a0a0a0; }
+  .msg-timestamp { font-size:10px; opacity:0.7; margin-top:2px; display:inline-block; }
+  .you .msg-timestamp { color:rgba(255,255,255,0.8); text-align:right; }
+  .bot .msg-timestamp { color:#a0a0a0; text-align:left; }
   .sys .msg-timestamp { color:#a0a0a0; text-align:center; }
   
   textarea { flex:1; resize:none; height:70px; background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:10px; }
-  button.primary { background:#1f6feb; color:white; border:none; border-radius:12px; padding:10px 14px; }
-  button.secondary { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:8px 12px; cursor:pointer; }
+  button.primary { background:#1f6feb; color:white; border:none; border-radius:12px; padding:10px 20px; height:70px; width:70px; display:flex; align-items:center; justify-content:center; }
+  button.secondary { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:10px 14px; cursor:pointer; font-size:16px; }
   #micBtn { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:10px 14px; cursor:pointer; font-size:16px; transition: all 0.3s ease; }
   #micBtn.recording { background:#ff4444 !important; animation: pulse 1.5s infinite; }
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }

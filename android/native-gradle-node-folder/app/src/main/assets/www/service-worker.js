@@ -5,6 +5,7 @@ console.log(`[ServiceWorker] WebSocket URL: ${wsUrl}`);
 
 let reconnectInterval = 3000;
 let reconnectTimer = null;
+let messageQueue = [];
 
 function connect() {
     console.log('[ServiceWorker] Attempting to connect...');
@@ -22,6 +23,10 @@ function connect() {
     ws.onopen = () => {
         console.log('[ServiceWorker] WebSocket connected');
         broadcast({ type: 'ws_open' });
+        while(messageQueue.length > 0) {
+            const message = messageQueue.shift();
+            ws.send(message);
+        }
     };
 
     ws.onmessage = (event) => {
@@ -41,6 +46,11 @@ function connect() {
     ws.onerror = (error) => {
         console.error('[ServiceWorker] WebSocket error:', error);
         broadcast({ type: 'ws_error' });
+        ws = null;
+        if (!reconnectTimer) {
+            console.log('[ServiceWorker] Scheduling reconnect due to error...');
+            reconnectTimer = setTimeout(connect, reconnectInterval);
+        }
     };
 }
 
@@ -78,6 +88,8 @@ self.addEventListener('message', (event) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(event.data);
     } else {
-        console.warn('[ServiceWorker] WebSocket not open. Message from client not sent.');
+        console.warn('[ServiceWorker] WebSocket not open. Message from client not sent. Attempting to reconnect...');
+        messageQueue.push(event.data);
+        connect();
     }
 });

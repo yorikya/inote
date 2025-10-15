@@ -8,7 +8,7 @@
   </div>
   
   <div class="chat-controls">
-    <button id="helpBtn" class="secondary">Commands</button>
+    <button id="helpBtn" class="secondary">💬 Commands</button>
     <button id="micBtn" title="Speech to text">🎤 Speak</button>
     <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
   </div>
@@ -660,6 +660,14 @@ function addMsg(text, who) {
       mc.className = "msg-content";
       mc.innerHTML = text;
       div.appendChild(mc);
+      
+      // Add timestamp
+      const timestamp = document.createElement("div");
+      timestamp.className = "msg-timestamp";
+      const now = new Date();
+      timestamp.textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      div.appendChild(timestamp);
+      
       logEl.appendChild(div);
     }
   }
