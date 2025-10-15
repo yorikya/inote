@@ -1,0 +1,860 @@
+<!-- Chat Page Content -->
+<div id="log"></div>
+
+<form id="chat">
+  <div class="input-row">
+    <textarea id="input" placeholder="Type a message…"></textarea>
+    <button class="primary" type="submit">Send</button>
+  </div>
+  
+  <div class="chat-controls">
+    <button id="helpBtn" class="secondary">Commands</button>
+    <button id="micBtn" title="Speech to text">🎤 Speak</button>
+    <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
+  </div>
+</form>
+
+<!-- Upload Modal -->
+<div id="uploadModal" class="upload-modal">
+  <div class="upload-content">
+    <div class="upload-header">
+      <h3>Upload Images</h3>
+      <button class="upload-close" onclick="closeUploadModal()">&times;</button>
+    </div>
+    <div class="upload-body">
+      <div class="upload-area" onclick="selectImages()">
+        <div class="upload-icon">📷</div>
+        <div class="upload-text">Click to select images</div>
+        <div class="upload-hint">Supports JPG, PNG, GIF (max 5 images)</div>
+      </div>
+      
+      <input type="file" id="fileInput" class="file-input" multiple accept="image/*" style="display: none;">
+      <div id="previewContainer" class="preview-container"></div>
+      <div class="upload-buttons">
+        <button class="cancel-btn" onclick="closeUploadModal()">Cancel</button>
+        <button class="upload-btn" id="uploadBtn" onclick="uploadImages()" disabled>Upload</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Commands Popup -->
+<div class="overlay" id="commandsOverlay"></div>
+<div class="commands-popup" id="commandsPopup">
+  <div class="commands-header">
+    <h3>Quick Commands</h3>
+    <button id="closeCommands">✕</button>
+  </div>
+  <div class="commands-content" id="commandsContent">
+    <!-- Commands will be populated dynamically based on current mode -->
+  </div>
+</div>
+
+<script>
+// Wrap in IIFE to avoid variable redeclaration errors
+(function() {
+// Global debug flag - set to false for production
+const DEBUG = false;
+
+// Debug logging function
+const debugLog = (...args) => {
+  if (DEBUG) {
+    console.log(...args);
+  }
+};
+
+// Chat page specific functionality
+let currentNoteId = null;
+let selectedFiles = [];
+let availableCommands = [];
+let commandsLoaded = false;
+let commandHistory = [];
+const MAX_COMMAND_HISTORY = 10;
+let isInitializing = true; // Flag to prevent auto-scroll during initialization
+
+// Global variables for chat functionality
+let rec = null;
+let isRecording = false;
+let thinkingInterval = null, thinkingDots = 0, thinkingMsg = null;
+
+// Initialize chat page when loaded
+function initializeChatPageWhenReady() {
+  // Wait for the main app to be ready and DOM elements to be available
+  if (window.App && window.SharedWebSocket && document.getElementById("input")) {
+    initializeChatPage();
+  } else {
+    setTimeout(initializeChatPageWhenReady, 100);
+  }
+}
+
+// Make function globally accessible
+window.initializeChatPageWhenReady = initializeChatPageWhenReady;
+
+// Aggressive scroll position management for dynamic content
+function initializeScrollPosition() {
+  const logEl = document.getElementById("log");
+  if (!logEl) return;
+  
+  // Store the current scroll position immediately
+  const currentScrollPosition = window.scrollY || document.documentElement.scrollTop;
+  debugLog('Current scroll position:', currentScrollPosition);
+  
+  // Check if we have a saved scroll position
+  const savedScrollTop = sessionStorage.getItem('chatScrollPosition');
+  
+  if (savedScrollTop !== null) {
+    // Restore the saved scroll position with aggressive techniques
+    debugLog('Restoring scroll position:', savedScrollTop);
+    
+    // Completely disable all scrolling temporarily
+    const originalOverflow = logEl.style.overflow;
+    const originalScrollBehavior = logEl.style.scrollBehavior;
+    const originalPosition = logEl.style.position;
+    
+    logEl.style.overflow = 'hidden';
+    logEl.style.scrollBehavior = 'auto';
+    logEl.style.position = 'relative';
+    
+    // Also disable document scrolling
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    
+    const restorePosition = (attempt = 1) => {
+      if (attempt <= 3) { // Reduced from 10 to 3 attempts
+        // Force scroll position without triggering events
+        logEl.scrollTop = parseInt(savedScrollTop);
+        
+        // Also restore document scroll position
+        window.scrollTo(0, currentScrollPosition);
+        
+        debugLog(`Restore attempt ${attempt}: scrollTop = ${logEl.scrollTop}, target = ${savedScrollTop}`);
+        
+        // Check if position was restored correctly
+        if (Math.abs(logEl.scrollTop - parseInt(savedScrollTop)) > 10) { // Increased tolerance from 3 to 10
+          setTimeout(() => restorePosition(attempt + 1), 100 * attempt); // Increased delay
+        } else {
+          debugLog('Scroll position successfully restored');
+          // Re-enable scrolling after a delay
+          setTimeout(() => {
+            logEl.style.overflow = originalOverflow;
+            logEl.style.scrollBehavior = originalScrollBehavior;
+            logEl.style.position = originalPosition;
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+          }, 300);
+        }
+      } else {
+        // Fallback: re-enable scrolling even if restoration failed
+        logEl.style.overflow = originalOverflow;
+        logEl.style.scrollBehavior = originalScrollBehavior;
+        logEl.style.position = originalPosition;
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        debugLog('Scroll restoration failed, re-enabled scrolling');
+      }
+    };
+    
+    // Start restoration after content is loaded
+    setTimeout(() => restorePosition(), 50);
+  } else {
+    // Only scroll to bottom if this is a completely fresh chat (no history at all)
+    debugLog('No saved scroll position, checking if should scroll to bottom');
+    setTimeout(() => {
+      // Only auto-scroll if there are very few messages (fresh chat)
+      const messageCount = logEl.children.length;
+      if (messageCount <= 1) {
+        debugLog('Completely fresh chat detected, scrolling to bottom');
+        scrollToBottom();
+      } else {
+        debugLog('Chat has history, not auto-scrolling');
+      }
+    }, 200);
+  }
+  
+  // Save scroll position when user scrolls (with debouncing)
+  let scrollTimeout;
+  logEl.addEventListener('scroll', () => {
+    // Don't save scroll position during page transitions
+    if (window.isPageTransitioning && window.isPageTransitioning()) {
+      return;
+    }
+    
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      const scrollTop = logEl.scrollTop;
+      sessionStorage.setItem('chatScrollPosition', scrollTop.toString());
+      debugLog('Scroll position saved:', scrollTop);
+    }, 150); // Debounce scroll saving
+  });
+}
+
+function scrollToBottom() {
+  const logEl = document.getElementById("log");
+  if (logEl) {
+    const oldScrollTop = logEl.scrollTop;
+    const scrollHeight = logEl.scrollHeight;
+    const clientHeight = logEl.clientHeight;
+    const childCount = logEl.children.length;
+    
+    // Force scroll to bottom with multiple attempts
+    logEl.scrollTop = logEl.scrollHeight;
+    
+    debugLog('Scrolled to bottom - old:', oldScrollTop, 'new:', logEl.scrollTop, 'scrollHeight:', scrollHeight, 'clientHeight:', clientHeight, 'children:', childCount);
+    
+    // If no scrollable content, try to load chat history
+    if (scrollHeight === clientHeight && childCount === 0) {
+      debugLog('No chat content found, trying to load chat history');
+      if (window.SharedUtils && window.SharedUtils.loadChatHistory) {
+        window.SharedUtils.loadChatHistory();
+        // Try scrolling again after a delay
+        setTimeout(() => {
+          logEl.scrollTop = logEl.scrollHeight;
+          debugLog('Retry scroll after loading history - scrollHeight:', logEl.scrollHeight, 'clientHeight:', logEl.clientHeight);
+        }, 200);
+      }
+    }
+    
+    // Force scroll if it didn't work - try multiple approaches
+    if (logEl.scrollTop === oldScrollTop && scrollHeight > clientHeight) {
+      debugLog('Forcing scroll to bottom');
+      logEl.scrollTop = scrollHeight;
+      // Try alternative scroll methods
+      logEl.scrollTo(0, logEl.scrollHeight);
+      logEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+    
+    // Multiple retry attempts with increasing delays
+    const retryScroll = (attempt = 1) => {
+      if (logEl.scrollTop < scrollHeight - clientHeight - 10 && attempt <= 3) {
+        setTimeout(() => {
+          logEl.scrollTop = logEl.scrollHeight;
+          debugLog(`Retry scroll attempt ${attempt} - scrollTop:`, logEl.scrollTop, 'scrollHeight:', logEl.scrollHeight);
+          retryScroll(attempt + 1);
+        }, attempt * 100); // 100ms, 200ms, 300ms delays
+      }
+    };
+    
+    retryScroll();
+  } else {
+    debugLog('Log element not found for scrolling');
+  }
+}
+
+// Make scrollToBottom globally accessible
+window.scrollToBottom = scrollToBottom;
+
+function loadNoteContext() {
+  const noteId = localStorage.getItem('currentNoteId');
+  debugLog('Checking for note context, currentNoteId:', noteId);
+  if (noteId) {
+    debugLog('Loading note context for note ID:', noteId);
+    // Clear the stored note ID so it doesn't persist
+    localStorage.removeItem('currentNoteId');
+    
+    // Wait a bit for the chat page to be fully initialized
+    setTimeout(() => {
+      // Send a command to load the note in chat
+      if (window.SharedUtils && window.SharedUtils.sendToWorker) {
+        debugLog('Sending findbyid command for note:', noteId);
+        window.SharedUtils.sendToWorker({ 
+          type: 'chat', 
+          text: `/findbyid ${noteId}` 
+        });
+        debugLog('Sent findbyid command for note:', noteId);
+        
+        // Don't force scroll for note context - let user stay where they are
+        debugLog('Note context command sent, not forcing scroll');
+      } else {
+        console.error('SharedUtils.sendToWorker not available for note context loading');
+      }
+    }, 500); // Wait 500ms for page initialization
+  } else {
+    debugLog('No note context found in localStorage');
+  }
+}
+
+function setupAutoScrollForNewMessages() {
+  const logEl = document.getElementById("log");
+  if (!logEl) return;
+  
+  // Watch for new messages being added to the chat
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+        // Only auto-scroll if user is at the absolute bottom (within 5px) AND it's a fresh chat
+        const isAtBottom = logEl.scrollTop >= (logEl.scrollHeight - logEl.clientHeight - 5);
+        const messageCount = logEl.children.length;
+        const isFreshChat = messageCount <= 2;
+        
+        // More intelligent auto-scroll logic
+        if (!isInitializing && !window.isPageTransitioning()) {
+          if (isAtBottom) {
+            debugLog('New messages detected and user at bottom - scrolling to bottom');
+            setTimeout(() => scrollToBottom(), 100);
+          } else if (isFreshChat) {
+            debugLog('New messages detected in fresh chat - scrolling to bottom');
+            setTimeout(() => scrollToBottom(), 100);
+          } else {
+            debugLog('New messages detected but user not at bottom and not fresh chat - not auto-scrolling');
+          }
+        } else {
+          debugLog('New messages detected but not auto-scrolling - still initializing or page transitioning');
+        }
+      }
+    });
+  });
+  
+  observer.observe(logEl, { childList: true, subtree: true });
+  debugLog('Auto-scroll observer set up for new messages (very restrictive)');
+}
+
+function initializeChatPage() {
+  // Setup UI elements
+  const logEl = document.getElementById("log");
+  const inputEl = document.getElementById("input");
+  const formEl = document.getElementById("chat");
+  const micBtn = document.getElementById("micBtn");
+  const useTTS = document.getElementById("useTTS");
+  const helpBtn = document.getElementById("helpBtn");
+  const commandsPopup = document.getElementById("commandsPopup");
+  
+  // Initialize scroll position management after a delay to ensure content is loaded
+  setTimeout(() => {
+    // Aggressively prevent all scrolling during initialization
+    const logEl = document.getElementById("log");
+    if (logEl) {
+      logEl.style.overflow = 'hidden';
+      logEl.style.pointerEvents = 'none';
+    }
+    
+    // Remove focus from any active element to prevent focus-induced scrolling
+    // But don't blur input fields
+    if (document.activeElement && 
+        document.activeElement.tagName !== 'INPUT' && 
+        document.activeElement.tagName !== 'TEXTAREA' && 
+        document.activeElement.tagName !== 'BUTTON') {
+      document.activeElement.blur();
+    }
+    
+    // Prevent any scroll events during initialization, but allow input field scrolling
+    const preventScroll = (e) => {
+      // Allow scrolling on input fields and their parents
+      const target = e.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || 
+          target.closest('input') || target.closest('textarea') ||
+          target.closest('#chat') || target.closest('.input-row')) {
+        return; // Allow normal scrolling behavior
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+    
+    document.addEventListener('scroll', preventScroll, { passive: false, capture: true });
+    document.addEventListener('wheel', preventScroll, { passive: false, capture: true });
+    document.addEventListener('touchmove', preventScroll, { passive: false, capture: true });
+    
+    initializeScrollPosition();
+    
+    // Mark initialization as complete after scroll position is restored
+    setTimeout(() => {
+      isInitializing = false;
+      debugLog('Chat initialization complete, auto-scroll enabled');
+      
+      // Re-enable scrolling after initialization
+      if (logEl) {
+        logEl.style.overflow = 'auto';
+        logEl.style.pointerEvents = 'auto';
+      }
+      
+      // Remove scroll prevention listeners
+      document.removeEventListener('scroll', preventScroll, { capture: true });
+      document.removeEventListener('wheel', preventScroll, { capture: true });
+      document.removeEventListener('touchmove', preventScroll, { capture: true });
+    }, 2000); // Increased delay to ensure everything is settled
+  }, 300);
+  const commandsOverlay = document.getElementById("commandsOverlay");
+  const closeCommands = document.getElementById("closeCommands");
+  const commandsContent = document.getElementById("commandsContent");
+
+  // Load command history
+  loadCommandHistory();
+  
+  // Load available commands on page initialization
+  loadAvailableCommands();
+
+  // Setup event listeners
+  if (formEl && inputEl) {
+    formEl.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = (inputEl.value || "").trim();
+      if (!text) return;
+      addMsg(text, "you");
+      if (isCommand(text)) addToCommandHistory(text);
+      inputEl.value = "";
+      if (window.SharedUtils) {
+        window.SharedUtils.sendToWorker({ type: 'chat', text, lang: window.SharedUtils.settings.lang, autoConfirm: window.SharedUtils.settings.autoConfirm });
+      }
+      // Don't auto-scroll when user sends message - let them stay where they are
+    });
+    
+    // Prevent scroll propagation from input field to chat messages
+    inputEl.addEventListener('wheel', (e) => {
+      e.stopPropagation();
+    });
+    
+    // Ensure input field can receive focus properly
+    inputEl.addEventListener('focus', (e) => {
+      e.stopPropagation();
+    });
+  }
+
+  if (micBtn) {
+    micBtn.onclick = () => { isRecording ? stopRecording() : startRecording(); };
+  }
+
+  if (helpBtn) {
+    helpBtn.onclick = () => {
+      // Load commands if not already loaded
+      if (!commandsLoaded) {
+        debugLog('Commands not loaded, loading them now');
+        loadAvailableCommands();
+      }
+      populateCommands();
+      commandsPopup.classList.add("show");
+      commandsOverlay.classList.add("show");
+    };
+  }
+
+  if (closeCommands) {
+    closeCommands.onclick = () => {
+      commandsPopup.classList.remove("show");
+      commandsOverlay.classList.remove("show");
+    };
+  }
+
+  if (commandsOverlay) {
+    commandsOverlay.onclick = () => {
+      commandsPopup.classList.remove("show");
+      commandsOverlay.classList.remove("show");
+    };
+  }
+
+  // Command button click handler
+  document.addEventListener('click', (e) => {
+    const commandButton = e.target.closest('.command-btn');
+    if (commandButton) {
+      const command = commandButton.getAttribute('data-command');
+      if (command) {
+        inputEl.value = command;
+        addToCommandHistory(command);
+        commandsPopup.classList.remove("show");
+        commandsOverlay.classList.remove("show");
+        inputEl.focus();
+        inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  });
+
+  // Load chat history
+  if (window.SharedUtils && window.SharedUtils.loadChatHistory) {
+    window.SharedUtils.loadChatHistory();
+  }
+  
+  // Check if we have a note context from explorer
+  loadNoteContext();
+  
+  // Set up auto-scroll for new messages
+  setupAutoScrollForNewMessages();
+  
+}
+
+function addToCommandHistory(command) {
+  commandHistory = commandHistory.filter(cmd => cmd !== command);
+  commandHistory.unshift(command);
+  if (commandHistory.length > MAX_COMMAND_HISTORY) {
+    commandHistory = commandHistory.slice(0, MAX_COMMAND_HISTORY);
+  }
+  localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
+}
+
+function loadCommandHistory() {
+  const saved = localStorage.getItem('commandHistory');
+  if (saved) {
+    try { commandHistory = JSON.parse(saved); } catch (e) { commandHistory = []; }
+  }
+}
+
+function getCommandHistory() { return commandHistory; }
+
+function loadAvailableCommands() {
+  debugLog('Loading available commands...');
+  if (window.SharedUtils && window.SharedUtils.sendToWorker) {
+    debugLog('Sending get_commands request to worker');
+    window.SharedUtils.sendToWorker({type: 'get_commands'});
+    
+    // Set a timeout to detect if commands don't load
+    setTimeout(() => {
+      if (!commandsLoaded) {
+        console.warn('Commands did not load within 5 seconds, retrying...');
+        window.SharedUtils.sendToWorker({type: 'get_commands'});
+      }
+    }, 5000);
+  } else {
+    console.error('SharedUtils.sendToWorker not available for loading commands');
+    console.error('SharedUtils available:', !!window.SharedUtils);
+    console.error('SharedUtils.sendToWorker available:', !!(window.SharedUtils && window.SharedUtils.sendToWorker));
+  }
+}
+
+function generateDynamicCommands() {
+  if (availableCommands.length === 0) return '<div class="command-category"><h4>❌ No commands available</h4></div>';
+  const categories = {};
+  availableCommands.forEach(cmd => {
+    if (!categories[cmd.category]) categories[cmd.category] = [];
+    categories[cmd.category].push(cmd);
+  });
+  let html = '';
+  for (const category in categories) {
+    html += `<div class="command-category"><h4>${category}</h4>`;
+    categories[category].forEach(cmd => {
+      const commandText = cmd.requiresParam ? cmd.command + ' ' : cmd.command;
+      let buttonText = cmd.command;
+      if (cmd.description) buttonText += ` <span style="opacity: 0.6; font-size: 0.85em; font-style: italic;">[${cmd.description}]</span>`;
+      if (cmd.requiresParam && cmd.examples && cmd.examples.length > 0) buttonText += ` <span style="opacity: 0.7; font-size: 0.9em;">(${cmd.examples[0]})</span>`;
+      html += `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+function updateModeFromMessage(message) {
+  if (message.includes("What would you like to do?") || message.includes("cancelled")) {
+    loadAvailableCommands();
+  }
+}
+
+function populateCommands() {
+  const commandsContent = document.getElementById("commandsContent");
+  if (!commandsContent) return;
+  
+  debugLog('Populating commands - commandsLoaded:', commandsLoaded, 'availableCommands.length:', availableCommands.length);
+  
+  commandsContent.innerHTML = '';
+  const history = getCommandHistory();
+  if (history.length > 0) {
+    let historyHtml = `<div class="command-category"><h4>🕒 Recent Commands</h4>`;
+    for (let i = 0; i < Math.min(history.length, 5); i++) {
+      historyHtml += `<button class="command-btn" data-command="${history[i]}">${history[i]}</button>`;
+    }
+    historyHtml += `</div>`;
+    commandsContent.innerHTML += historyHtml;
+  }
+  if (commandsLoaded && availableCommands.length > 0) {
+    debugLog('Adding dynamic commands to popup');
+    commandsContent.innerHTML += generateDynamicCommands();
+  } else {
+    debugLog('Commands not loaded yet, showing loading message');
+    commandsContent.innerHTML += `<div class="command-category"><h4>❌ No commands available</h4><p>Loading...</p></div>`;
+  }
+}
+
+function isCommand(text) {
+  return [ /^\/\w+/i, /^(create|find|show|help|edit|delete|mark|talk|stop|yes|no)\b/i ].some(p => p.test(text));
+}
+
+// Speech-to-Text & Text-to-Speech
+function startRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return addMsg("❌ Speech Recognition not supported.", "sys");
+  try {
+    if (!rec) {
+      rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onstart = () => { isRecording = true; document.getElementById("micBtn").textContent = "■ Stop"; document.getElementById("micBtn").classList.add("recording"); };
+      rec.onresult = (e) => {
+        let final = "", interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          e.results[i].isFinal ? final += t : interim += t;
+        }
+        document.getElementById("input").value = final || interim;
+      };
+      rec.onerror = (e) => { addMsg("❌ Speech error: " + e.error, "sys"); stopRecording(); };
+      rec.onend = () => stopRecording();
+    }
+    rec.lang = (SharedUtils.settings.lang === "he") ? "he-IL" : "en-US";
+    document.getElementById("input").value = "";
+    rec.start();
+  } catch (error) {
+    addMsg("❌ Failed to start speech recognition: " + error.message, "sys");
+  }
+}
+
+function stopRecording() {
+  if (rec && isRecording) rec.stop();
+  isRecording = false;
+  const micBtn = document.getElementById("micBtn");
+  if (micBtn) {
+    micBtn.textContent = "🎤 Speak";
+    micBtn.classList.remove("recording");
+  }
+}
+
+async function speakText(text) {
+  const useTTS = document.getElementById("useTTS");
+  if (!useTTS || !useTTS.checked) return;
+  SharedUtils.speakText(text);
+}
+
+// URL Parameter Handling
+function handleUrlParameters() {
+  const findbyid = SharedUtils.getUrlParameter('findbyid');
+  if (findbyid) {
+    addMsg(`Auto-finding note ID: ${findbyid}`, 'sys');
+    SharedUtils.sendToWorker({ type: 'chat', text: `/findbyid ${findbyid}`, lang: SharedUtils.settings.lang, autoConfirm: SharedUtils.settings.autoConfirm });
+  }
+}
+
+// Thinking Indicator
+function showThinkingIndicator() {
+  const logEl = document.getElementById("log");
+  if (!logEl || thinkingMsg) return;
+  thinkingMsg = document.createElement('div');
+  thinkingMsg.className = "msg bot";
+  const mc = document.createElement("div");
+  mc.className = "msg-content";
+  mc.textContent = "Thinking";
+  thinkingMsg.appendChild(mc);
+  logEl.appendChild(thinkingMsg);
+  thinkingInterval = setInterval(() => { mc.textContent = "Thinking" + ".".repeat((++thinkingDots) % 4); }, 500);
+  // Don't auto-scroll for thinking indicator - let user stay where they are
+}
+
+function hideThinkingIndicator() {
+  if (thinkingInterval) clearInterval(thinkingInterval);
+  thinkingInterval = null;
+  if (thinkingMsg) thinkingMsg.remove();
+  thinkingMsg = null;
+}
+
+// Utilities
+function addMsg(text, who) {
+  console.log('addMsg called with:', text, who);
+  console.log('SharedUtils available:', !!window.SharedUtils);
+  console.log('SharedUtils.addMessage available:', !!(window.SharedUtils && window.SharedUtils.addMessage));
+  if (window.SharedUtils && window.SharedUtils.addMessage) {
+    window.SharedUtils.addMessage(text, who);
+  } else {
+    console.error('SharedUtils.addMessage not available');
+    // Fallback: add message directly to DOM
+    const logEl = document.getElementById("log");
+    if (logEl) {
+      const div = document.createElement("div");
+      div.className = "msg " + who;
+      const mc = document.createElement("div");
+      mc.className = "msg-content";
+      mc.innerHTML = text;
+      div.appendChild(mc);
+      logEl.appendChild(div);
+    }
+  }
+  if (who === "bot" && document.getElementById("useTTS")?.checked) speakText(text);
+}
+
+function linkifyText(text) {
+  if (window.SharedUtils && window.SharedUtils.linkifyText) {
+    return window.SharedUtils.linkifyText(text);
+  } else {
+    console.error('SharedUtils.linkifyText not available');
+    return text; // fallback
+  }
+}
+
+
+function saveMessageToHistory(text, who) {
+  if (window.SharedUtils && window.SharedUtils.saveMessageToHistory) {
+    window.SharedUtils.saveMessageToHistory(text, who);
+  } else {
+    console.error('SharedUtils.saveMessageToHistory not available');
+  }
+}
+
+function loadChatHistory() {
+  if (window.SharedUtils && window.SharedUtils.loadChatHistory) {
+    window.SharedUtils.loadChatHistory();
+  } else {
+    console.error('SharedUtils.loadChatHistory not available');
+  }
+}
+
+function clearChatHistory() {
+  if (window.SharedUtils && window.SharedUtils.clearChatHistory) {
+    window.SharedUtils.clearChatHistory();
+  } else {
+    console.error('SharedUtils.clearChatHistory not available');
+  }
+}
+
+// Upload Modal Functions
+function showUploadModal(noteId) {
+  currentNoteId = noteId;
+  const uploadModal = document.getElementById('uploadModal');
+  if (uploadModal) uploadModal.classList.add('show');
+  const fileInput = document.getElementById('fileInput');
+  if (fileInput) fileInput.onchange = handleFileSelect;
+}
+
+function closeUploadModal() {
+  const uploadModal = document.getElementById('uploadModal');
+  if (uploadModal) uploadModal.classList.remove('show');
+}
+
+function selectImages() {
+  const fileInput = document.getElementById('fileInput');
+  if (fileInput) fileInput.click();
+}
+
+// Make functions globally accessible
+window.closeUploadModal = closeUploadModal;
+window.selectImages = selectImages;
+
+function handleFileSelect(event) {
+  if (!event.target.files) return;
+  selectedFiles = Array.from(event.target.files).filter(f => f.type.startsWith('image/')).slice(0, 5);
+  updatePreview();
+  const uploadBtn = document.getElementById('uploadBtn');
+  if (uploadBtn) uploadBtn.disabled = selectedFiles.length === 0;
+}
+
+function updatePreview() {
+  const c = document.getElementById('previewContainer');
+  const b = document.getElementById('uploadBtn');
+  if (selectedFiles.length === 0) {
+    if (c) c.innerHTML = '<p>No images selected</p>';
+    if (b) b.disabled = true;
+    return;
+  }
+  if (c) c.innerHTML = `<p>Selected ${selectedFiles.length} image(s)</p>`;
+  if (b) b.disabled = false;
+}
+
+function uploadImages() {
+  if (selectedFiles.length === 0 || !currentNoteId) return;
+  addMsg(`📤 Uploading ${selectedFiles.length} image(s)...`, "sys");
+  selectedFiles.forEach(file => {
+    resizeAndCompressImage(file, (base64) => {
+      if (window.SharedUtils && window.SharedUtils.sendToWorker) {
+        window.SharedUtils.sendToWorker({ type: 'image_upload', noteId: currentNoteId, imageName: file.name, imageData: base64 });
+      }
+    });
+  });
+  closeUploadModal();
+}
+
+// Make function globally accessible
+window.uploadImages = uploadImages;
+
+function resizeAndCompressImage(file, callback) {
+  if (window.SharedUtils && window.SharedUtils.resizeAndCompressImage) {
+    window.SharedUtils.resizeAndCompressImage(file, callback);
+  } else {
+    console.error('SharedUtils.resizeAndCompressImage not available');
+  }
+}
+
+// Register WebSocket handlers for chat page
+if (window.SharedWebSocket && window.SharedWebSocket.registerHandler) {
+  // Register chat-specific handlers with error handling
+  // Note: reply handler is handled by app.html to avoid duplicates
+  // We only need to handle note ID extraction and mode updates
+  SharedWebSocket.registerHandler('reply_processed', (data) => {
+    try {
+      const idMatch = data.text.match(/\(ID: (\d+)\)/);
+      if (idMatch && idMatch[1]) {
+        currentNoteId = idMatch[1];
+        localStorage.setItem('currentNoteId', currentNoteId);
+      }
+      if ([ 'No parent note selected', 'No notes have been found', 'cleared successfully', 'Returned to main menu' ].some(m => data.text.includes(m))) {
+        currentNoteId = null;
+        localStorage.removeItem('currentNoteId');
+      }
+      updateModeFromMessage(data.text);
+      const useTTS = document.getElementById("useTTS");
+      if (useTTS && useTTS.checked) speakText(data.text);
+    } catch (error) {
+      console.error('Error in reply_processed handler:', error);
+    }
+  });
+  
+  SharedWebSocket.registerHandler('request_image_upload', (data) => {
+    try {
+      showUploadModal(data.data.noteId);
+    } catch (error) {
+      console.error('Error in request_image_upload handler:', error);
+    }
+  });
+  
+  SharedWebSocket.registerHandler('trigger_image_upload', (data) => {
+    try {
+      currentNoteId = data.noteId;
+      localStorage.setItem('currentNoteId', currentNoteId);
+      showUploadModal(data.noteId);
+    } catch (error) {
+      console.error('Error in trigger_image_upload handler:', error);
+    }
+  });
+  
+  SharedWebSocket.registerHandler('available_commands', (data) => {
+    try {
+      availableCommands = data.commands || [];
+      commandsLoaded = true;
+      debugLog('Available commands received:', availableCommands.length, 'commands');
+      // Refresh commands popup if it's open
+      const commandsPopup = document.getElementById("commandsPopup");
+      if (commandsPopup && commandsPopup.classList.contains("show")) {
+        debugLog('Commands popup is open, refreshing commands');
+        populateCommands();
+      } else {
+        debugLog('Commands popup is not open, commands will be available when opened');
+      }
+    } catch (error) {
+      console.error('Error in available_commands handler:', error);
+    }
+  });
+  
+  SharedWebSocket.registerHandler('found_notes', (data) => {
+    try {
+      if (!data.notes || data.notes.length === 0) {
+        addMsg('No notes found', 'bot');
+      }
+    } catch (error) {
+      console.error('Error in found_notes handler:', error);
+    }
+  });
+  
+  SharedWebSocket.registerHandler('thinking', (data) => {
+    try {
+      showThinkingIndicator();
+    } catch (error) {
+      console.error('Error in thinking handler:', error);
+    }
+  });
+  
+  SharedWebSocket.registerHandler('thinking_done', (data) => {
+    try {
+      hideThinkingIndicator();
+    } catch (error) {
+      console.error('Error in thinking_done handler:', error);
+    }
+  });
+} else {
+  console.warn('SharedWebSocket not available for chat page handlers');
+}
+
+})(); // End of IIFE
+</script>

@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Note Secretary – DroidScript Backend</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="explorer.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <button id="menuBtn">☰</button>
+    <h1 id="pageTitle">💬 Chat</h1>
+    <div class="spacer"></div>
+    <div class="connection-status">
+      <span class="connection-led" id="statusLed"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+    <select id="lang">
+      <option value="en-US">English</option>
+      <option value="he-IL">עברית</option>
+    </select>
+    <button id="clearBtn" class="secondary" title="Clear chat messages">🗑️</button>
+  </header>
+
+  <!-- Dynamic content area -->
+  <div id="contentArea" style="margin-top: 60px;">
+    <!-- Content will be loaded here dynamically -->
+  </div>
+</div>
+
+<!-- Side Menu -->
+<div class="overlay" id="overlay"></div>
+<div class="side-menu" id="sideMenu">
+  <div class="side-menu-header">
+    <h2>Menu</h2>
+    <button id="closeMenu">✕</button>
+  </div>
+  <div class="side-menu-content">
+    <h3>Navigation</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+      <button id="chatButton" class="nav-button active">💬 Chat</button>
+      <button id="explorerButton" class="nav-button secondary">📝 Note Explorer</button>
+      <button id="settingsButton" class="nav-button secondary">⚙️ Settings</button>
+    </div>
+    
+    <!-- Explorer Filter Options (shown only on explorer page) -->
+    <div id="explorerFilters" style="display:none;">
+      <h3>Filter Options</h3>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+        <button id="showAllBtn" class="nav-button">📋 All Notes</button>
+        <button id="showCompletedBtn" class="nav-button secondary">✅ Completed</button>
+        <button id="showPendingBtn" class="nav-button secondary">⏳ Pending</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Load shared utilities and WebSocket client only once -->
+<script src="shared-utils.js"></script>
+<script src="shared-websocket.js"></script>
+
+<script>
+// Wait for SharedUtils to be available
+function waitForSharedUtils(callback) {
+  if (window.SharedUtils) {
+    callback();
+  } else {
+    setTimeout(() => waitForSharedUtils(callback), 10);
+  }
+}
+/**
+ * Main Application Framework
+ * Loads WebSocket client once and manages page navigation
+ */
+
+class AppFramework {
+  constructor() {
+    this.currentPage = 'chat';
+    this.pages = {
+      chat: { title: '💬 Chat', file: 'pages/chat.html' },
+      explorer: { title: '📝 Note Explorer', file: 'pages/explorer.html' },
+      settings: { title: '⚙️ Settings', file: 'pages/settings.html' }
+    };
+    this.settings = window.SharedUtils ? window.SharedUtils.settings : {
+      lang: "en",
+      geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4",
+      autoConfirm: false
+    };
+    this.scrollPositions = {}; // Store scroll positions for each page
+    this.init();
+  }
+
+  init() {
+    this.setupUI();
+    this.setupWebSocket();
+    this.setupNavigation();
+    this.loadPage('chat');
+  }
+
+  setupUI() {
+    // UI elements
+    this.menuBtn = document.getElementById("menuBtn");
+    this.sideMenu = document.getElementById("sideMenu");
+    this.overlay = document.getElementById("overlay");
+    this.closeMenu = document.getElementById("closeMenu");
+    this.contentArea = document.getElementById("contentArea");
+    this.pageTitle = document.getElementById("pageTitle");
+    this.langSel = document.getElementById("lang");
+    this.clearBtn = document.getElementById("clearBtn");
+    this.statusLed = document.getElementById("statusLed");
+    this.statusText = document.getElementById("statusText");
+
+    // Navigation buttons
+    this.chatButton = document.getElementById("chatButton");
+    this.explorerButton = document.getElementById("explorerButton");
+    this.settingsButton = document.getElementById("settingsButton");
+
+    // Event listeners
+    this.menuBtn.onclick = () => this.toggleMenu();
+    this.closeMenu.onclick = () => this.closeMenuHandler();
+    this.overlay.onclick = () => this.closeMenuHandler();
+    this.langSel.onchange = () => this.handleLanguageChange();
+    this.clearBtn.onclick = () => this.handleClearChat();
+
+    // Navigation
+    this.chatButton.onclick = () => this.navigateTo('chat');
+    this.explorerButton.onclick = () => this.navigateTo('explorer');
+    this.settingsButton.onclick = () => this.navigateTo('settings');
+  }
+
+  setupWebSocket() {
+    // Initialize WebSocket connection once
+    SharedWebSocket.registerHandler('ws_open', (data) => {
+      if (window.SharedUtils && window.SharedUtils.updateConnectionStatus) {
+        window.SharedUtils.updateConnectionStatus(true);
+      }
+      this.onConnectionOpen();
+    });
+    
+    SharedWebSocket.registerHandler('ws_close', (data) => {
+      if (window.SharedUtils && window.SharedUtils.updateConnectionStatus) {
+        window.SharedUtils.updateConnectionStatus(false);
+      }
+    });
+    
+    SharedWebSocket.registerHandler('ws_error', (data) => {
+      if (window.SharedUtils && window.SharedUtils.updateConnectionStatus) {
+        window.SharedUtils.updateConnectionStatus(false);
+      }
+    });
+
+    // Register common handlers that all pages might need
+    this.registerCommonHandlers();
+  }
+
+  registerCommonHandlers() {
+    // Common handlers that all pages might need
+    SharedWebSocket.registerHandler('reply', (data) => {
+      this.handleReply(data);
+    });
+    
+    SharedWebSocket.registerHandler('available_commands', (data) => {
+      this.handleAvailableCommands(data);
+    });
+    
+    SharedWebSocket.registerHandler('thinking', (data) => {
+      this.showThinkingIndicator();
+    });
+    
+    SharedWebSocket.registerHandler('thinking_done', (data) => {
+      this.hideThinkingIndicator();
+    });
+  }
+
+  setupNavigation() {
+    // Handle browser back/forward
+    window.addEventListener('popstate', (event) => {
+      const page = event.state?.page || 'chat';
+      this.loadPage(page, false);
+    });
+  }
+
+  navigateTo(page) {
+    if (this.currentPage === page) return;
+    
+    // Update browser history
+    history.pushState({ page }, '', `#${page}`);
+    
+    this.loadPage(page);
+    this.closeMenuHandler();
+  }
+  
+
+  async loadPage(page, updateHistory = true) {
+    debugLog('Loading page:', page);
+    if (!this.pages[page]) {
+      console.error(`Page ${page} not found`);
+      return;
+    }
+    
+    // Save current scroll position when leaving chat
+    if (this.currentPage === 'chat' && page !== 'chat') {
+      const logEl = document.getElementById("log");
+      if (logEl) {
+        const scrollTop = logEl.scrollTop;
+        sessionStorage.setItem('chatScrollPosition', scrollTop.toString());
+        console.log('Saved chat scroll position before leaving:', scrollTop);
+      }
+    }
+    
+        // Clear other page scroll positions when navigating to chat
+        if (page === 'chat' && this.currentPage !== 'chat') {
+          // Don't clear chat scroll position - we want to restore it
+          debugLog('Navigating to chat, preserving scroll position');
+        }
+
+    try {
+      // Update active navigation button
+      this.updateActiveNavButton(page);
+      
+      // Update page title
+      this.pageTitle.textContent = this.pages[page].title;
+      
+      // Load page content
+      const response = await fetch(this.pages[page].file);
+      if (!response.ok) {
+        throw new Error(`Failed to load page: ${response.status}`);
+      }
+      
+      const content = await response.text();
+      debugLog('Content loaded for', page, 'length:', content.length);
+      this.contentArea.innerHTML = content;
+      
+      // Execute any scripts in the loaded content
+      this.executeScriptsInContent();
+      
+      // Wait a bit for the content to be rendered, then initialize
+      setTimeout(() => {
+        debugLog('Initializing page after timeout:', page);
+        this.initializePage(page);
+      }, 50);
+      
+      this.currentPage = page;
+      
+    } catch (error) {
+      console.error('Error loading page:', error);
+      this.contentArea.innerHTML = `
+        <div style="padding: 20px; text-align: center;">
+          <h3>Error loading page</h3>
+          <p>Failed to load ${page} page</p>
+        </div>
+      `;
+    }
+  }
+
+  executeScriptsInContent() {
+    debugLog('Executing scripts in loaded content...');
+    const scripts = this.contentArea.querySelectorAll('script');
+    debugLog('Found', scripts.length, 'scripts to execute');
+    
+    scripts.forEach((script, index) => {
+      debugLog('Executing script', index + 1);
+      try {
+        // Create a new script element and execute it
+        const newScript = document.createElement('script');
+        newScript.textContent = script.textContent;
+        document.head.appendChild(newScript);
+        document.head.removeChild(newScript);
+        debugLog('Script', index + 1, 'executed successfully');
+      } catch (error) {
+        console.error('Error executing script', index + 1, ':', error);
+      }
+    });
+  }
+
+  initializePage(page) {
+    // Initialize page-specific functionality
+    switch (page) {
+      case 'chat':
+        this.initializeChatPage();
+        // Also trigger the page's own initialization
+        if (typeof window.initializeChatPageWhenReady === 'function') {
+          window.initializeChatPageWhenReady();
+        }
+        break;
+      case 'explorer':
+        console.log('Initializing explorer page from app.html');
+        this.initializeExplorerPage();
+        // Also trigger the page's own initialization
+        console.log('Checking for initializeExplorerPageWhenReady function...');
+        console.log('window.initializeExplorerPageWhenReady:', typeof window.initializeExplorerPageWhenReady);
+        if (typeof window.initializeExplorerPageWhenReady === 'function') {
+          console.log('Calling initializeExplorerPageWhenReady');
+          window.initializeExplorerPageWhenReady();
+        } else {
+          console.log('initializeExplorerPageWhenReady function not found');
+          console.log('Available functions:', Object.keys(window).filter(key => key.includes('initialize')));
+          
+          // Try to wait a bit and check again
+          setTimeout(() => {
+            console.log('Retrying to find initializeExplorerPageWhenReady...');
+            if (typeof window.initializeExplorerPageWhenReady === 'function') {
+              console.log('Found function on retry, calling it');
+              window.initializeExplorerPageWhenReady();
+            } else {
+              console.log('Still not found on retry');
+            }
+          }, 100);
+        }
+        break;
+      case 'settings':
+        this.initializeSettingsPage();
+        // Also trigger the page's own initialization
+        if (typeof window.initializeSettingsPageWhenReady === 'function') {
+          window.initializeSettingsPageWhenReady();
+        }
+        break;
+    }
+  }
+
+  initializeChatPage() {
+    // Initialize chat-specific functionality
+    const inputEl = document.getElementById("input");
+    const formEl = document.getElementById("chat");
+    
+    if (formEl && inputEl) {
+      formEl.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = (inputEl.value || "").trim();
+        if (!text) return;
+        this.sendChatMessage(text);
+        inputEl.value = "";
+      });
+    }
+
+    // Load chat history
+    if (window.SharedUtils && window.SharedUtils.loadChatHistory) {
+      window.SharedUtils.loadChatHistory();
+    }
+  }
+
+  initializeExplorerPage() {
+    // Show explorer filter options in side menu
+    const explorerFilters = document.getElementById("explorerFilters");
+    if (explorerFilters) {
+      explorerFilters.style.display = "block";
+    }
+    
+    // Initialize filter buttons
+    const showAllBtn = document.getElementById("showAllBtn");
+    const showCompletedBtn = document.getElementById("showCompletedBtn");
+    const showPendingBtn = document.getElementById("showPendingBtn");
+    
+    if (showAllBtn) showAllBtn.onclick = () => this.setFilter('all');
+    if (showCompletedBtn) showCompletedBtn.onclick = () => this.setFilter('completed');
+    if (showPendingBtn) showPendingBtn.onclick = () => this.setFilter('pending');
+    
+    // Load notes
+    this.loadNotes();
+  }
+
+  initializeSettingsPage() {
+    // Initialize settings-specific functionality
+    this.loadSettings();
+  }
+
+  setFilter(filter) {
+    // Delegate to the explorer page if it exists
+    if (typeof window.setFilter === 'function') {
+      window.setFilter(filter);
+    } else {
+      console.log('Setting filter to:', filter);
+    }
+  }
+
+  updateActiveNavButton(page) {
+    // Remove active class from all nav buttons
+    [this.chatButton, this.explorerButton, this.settingsButton].forEach(btn => {
+      if (btn) {
+        btn.classList.remove('active');
+        btn.classList.add('secondary');
+      }
+    });
+
+    // Add active class to current page button
+    const activeButton = this[`${page}Button`];
+    if (activeButton) {
+      activeButton.classList.add('active');
+      activeButton.classList.remove('secondary');
+    }
+
+    // Show/hide explorer filters based on current page
+    const explorerFilters = document.getElementById("explorerFilters");
+    if (explorerFilters) {
+      explorerFilters.style.display = page === 'explorer' ? 'block' : 'none';
+    }
+  }
+
+  toggleMenu() {
+    this.sideMenu.classList.add("open");
+    this.overlay.classList.add("show");
+  }
+
+  closeMenuHandler() {
+    this.sideMenu.classList.remove("open");
+    this.overlay.classList.remove("show");
+  }
+
+  handleLanguageChange() {
+    this.settings.lang = this.langSel.value;
+    document.documentElement.dir = (this.settings.lang === "he") ? "rtl" : "ltr";
+  }
+
+  handleClearChat() {
+    if (confirm("Are you sure you want to clear all chat messages?")) {
+      if (window.SharedUtils && window.SharedUtils.clearChatHistory) {
+        window.SharedUtils.clearChatHistory();
+      }
+      this.addMessage("🗑️ Chat messages cleared", "sys");
+    }
+  }
+
+
+  onConnectionOpen() {
+    // Handle connection open - load available commands, etc.
+    this.sendToWorker({ type: 'get_commands' });
+  }
+
+  sendToWorker(messageObject) {
+    if (window.SharedUtils && window.SharedUtils.sendToWorker) {
+      window.SharedUtils.sendToWorker(messageObject);
+    }
+  }
+
+  // Common utility methods
+  addMessage(text, who) {
+    if (window.SharedUtils && window.SharedUtils.addMessage) {
+      window.SharedUtils.addMessage(text, who);
+    }
+  }
+
+  sendChatMessage(text) {
+    this.addMessage(text, "you");
+    this.sendToWorker({ 
+      type: 'chat', 
+      text, 
+      lang: this.settings.lang, 
+      autoConfirm: this.settings.autoConfirm 
+    });
+    // Don't auto-scroll when sending message - let user stay where they are
+  }
+
+  loadNotes() {
+    this.sendToWorker({ type: "get_all_notes" });
+  }
+
+  loadSettings() {
+    if (window.SharedUtils && window.SharedUtils.loadSettings) {
+      window.SharedUtils.loadSettings();
+    }
+  }
+
+  // Common handlers
+  handleReply(data) {
+    this.addMessage(data.text, 'bot');
+    // Trigger reply_processed event for chat-specific handling
+    if (window.SharedWebSocket) {
+      window.SharedWebSocket.notifyHandlers('reply_processed', data);
+    }
+  }
+
+  handleAvailableCommands(data) {
+    // Handle available commands
+    console.log('Available commands:', data.commands);
+  }
+
+  showThinkingIndicator() {
+    // Show thinking indicator
+    console.log('Thinking...');
+  }
+
+  hideThinkingIndicator() {
+    // Hide thinking indicator
+    console.log('Thinking done');
+  }
+}
+
+// Global debug flag - set to false for production
+const DEBUG = false;
+
+// Debug logging function
+const debugLog = (...args) => {
+  if (DEBUG) {
+    console.log(...args);
+  }
+};
+
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Disable browser scroll restoration for dynamic content
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  
+  // Prevent focus-induced scrolling only for non-input elements
+  document.addEventListener('focusin', (e) => {
+    // Allow focus on input, textarea, and button elements
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON') {
+      return; // Allow normal focus behavior
+    }
+    // Prevent focus on other elements that might cause scrolling
+    e.preventDefault();
+    e.target.blur();
+  });
+  
+  // Prevent any scroll events globally during transitions
+  let globalScrollPrevention = false;
+  window.setGlobalScrollPrevention = (enabled) => {
+    globalScrollPrevention = enabled;
+  };
+  
+  const preventAllScroll = (e) => {
+    if (globalScrollPrevention) {
+      // Allow scrolling on input fields and their parents
+      const target = e.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || 
+          target.closest('input') || target.closest('textarea') ||
+          target.closest('#chat') || target.closest('.input-row')) {
+        return; // Allow normal scrolling behavior
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+  };
+  
+  document.addEventListener('scroll', preventAllScroll, { passive: false, capture: true });
+  document.addEventListener('wheel', preventAllScroll, { passive: false, capture: true });
+  document.addEventListener('touchmove', preventAllScroll, { passive: false, capture: true });
+  
+  // Global scroll prevention during page transitions
+  let isPageTransitioning = false;
+  let savedScrollPositions = {};
+  
+  window.isPageTransitioning = () => isPageTransitioning;
+  window.saveScrollPosition = (page, position) => {
+    savedScrollPositions[page] = position;
+  };
+  window.getSavedScrollPosition = (page) => {
+    return savedScrollPositions[page] || null;
+  };
+  
+  // Global scroll position management
+  window.preventAllScrolling = () => {
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+  };
+  
+  window.enableScrolling = () => {
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+  };
+  
+  waitForSharedUtils(() => {
+    window.App = new AppFramework();
+    // Make navigateTo globally accessible
+    window.navigateTo = (page) => {
+      isPageTransitioning = true;
+      window.setGlobalScrollPrevention(true);
+      window.preventAllScrolling();
+      window.App.navigateTo(page);
+      setTimeout(() => { 
+        isPageTransitioning = false;
+        window.setGlobalScrollPrevention(false);
+        window.enableScrolling();
+      }, 2000);
+    };
+  });
+});
+
+// Export for global access
+window.AppFramework = AppFramework;
+</script>
+</body>
+</html>

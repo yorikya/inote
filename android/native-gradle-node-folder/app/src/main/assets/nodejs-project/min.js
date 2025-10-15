@@ -122,7 +122,7 @@ const server = http.createServer((req, res) => {
 
   // Serve static frontend files from the www directory
   const wwwRoot = path.join(__dirname, '..', 'www');
-  let relPath = p === '/' ? '/index.html' : (p || '/index.html');
+  let relPath = p === '/' ? '/app.html' : (p || '/app.html');
   // Strip leading slash
   if (relPath.startsWith('/')) relPath = relPath.slice(1);
   const fp = path.join(wwwRoot, relPath);

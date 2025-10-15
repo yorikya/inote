@@ -1,0 +1,249 @@
+<!-- Settings Page Content -->
+<div class="settings-container">
+  <h2>Settings</h2>
+
+  <div class="settings-section">
+    <h3>Gemini API Configuration</h3>
+    <label for="geminiApiKey">Gemini API Key:</label>
+    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
+    <button id="saveApiKey">Save API Key</button>
+    <button id="useDefaultKey" class="secondary">Use Default Key</button>
+    <div style="margin-top:10px;">
+      <strong>Current Status:</strong> <span id="apiStatus">Using default API key</span>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3>Workflow Settings</h3>
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
+      <button id="toggleAutoConfirmBtn" class="nav-button" style="background:#2d5a87; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:14px; width:auto;">
+        Auto Confirm: OFF
+      </button>
+      <small style="color:#666; font-size:12px;">Toggle auto confirmation for all actions</small>
+    </div>
+    <div style="font-size:12px; color:#a0a0a0;">
+      When enabled, the system will automatically proceed with "Yes" for all confirmation prompts (note creation, deletion, marking as done, etc.)
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3>Chat History</h3>
+    <div style="display:flex; align-items:center; gap:16px;">
+      <button id="clearChatHistory" class="secondary" style="background:#ff6b35;">🗑️ Clear Chat History</button>
+      <small style="color:#a0a0a0; font-size:12px;">Clear all chat messages and history</small>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3>Debug Tools</h3>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button id="showNotes">Show Notes (Debug)</button>
+      <button id="clearNotes" class="secondary" style="background:#ff4444;">🗑️ Clear All Notes (DANGER)</button>
+    </div>
+    <div id="notesDisplay" style="margin-top:10px; padding:10px; background:#2a2f36; border-radius:6px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:12px; white-space:pre-wrap; display:none;"></div>
+  </div>
+</div>
+
+<script>
+// Settings page specific functionality
+var GlobalAutoConfirm = {
+  enabled: false,
+  toggle: function() {
+    this.enabled = !this.enabled;
+    console.log('Toggle called, SharedUtils available:', !!window.SharedUtils);
+    console.log('SharedUtils.settings available:', !!(window.SharedUtils && window.SharedUtils.settings));
+    if (window.SharedUtils && window.SharedUtils.settings) {
+      window.SharedUtils.settings.autoConfirm = this.enabled;
+    } else {
+      console.error('SharedUtils.settings not available');
+    }
+    this.updateUI();
+    this.saveToStorage();
+    this.updateBackend();
+    return this.enabled;
+  },
+  updateUI: function() {
+    const btn = document.getElementById('toggleAutoConfirmBtn');
+    if (btn) {
+      btn.textContent = `Auto Confirm: ${this.enabled ? 'ON' : 'OFF'}`;
+      btn.style.background = this.enabled ? '#28a745' : '#2d5a87';
+    }
+  },
+  saveToStorage: function() {
+    localStorage.setItem('globalAutoConfirm', this.enabled.toString());
+  },
+  loadFromStorage: function() {
+    const saved = localStorage.getItem('globalAutoConfirm');
+    this.enabled = saved === 'true';
+    console.log('LoadFromStorage called, SharedUtils available:', !!window.SharedUtils);
+    if (window.SharedUtils && window.SharedUtils.settings) {
+      window.SharedUtils.settings.autoConfirm = this.enabled;
+    } else {
+      console.error('SharedUtils.settings not available in loadFromStorage');
+    }
+    this.updateUI();
+  },
+  updateBackend: function() {
+    sendToWorker({ type: 'set_auto_confirm', enabled: this.enabled });
+    if (window.SharedUtils && window.SharedUtils.settings) {
+      window.SharedUtils.settings.autoConfirm = this.enabled;
+    } else {
+      console.error('SharedUtils.settings not available in updateBackend');
+    }
+  }
+};
+
+// Initialize settings page when loaded
+function initializeSettingsPageWhenReady() {
+  // Wait for the main app to be ready and DOM elements to be available
+  if (window.App && window.SharedWebSocket && document.getElementById("geminiApiKey")) {
+    initializeSettingsPage();
+  } else {
+    setTimeout(initializeSettingsPageWhenReady, 100);
+  }
+}
+
+// Make function globally accessible
+window.initializeSettingsPageWhenReady = initializeSettingsPageWhenReady;
+
+function initializeSettingsPage() {
+  // Setup UI elements
+  const geminiApiKey = document.getElementById("geminiApiKey");
+  const saveApiKey = document.getElementById("saveApiKey");
+  const useDefaultKey = document.getElementById("useDefaultKey");
+  const apiStatus = document.getElementById("apiStatus");
+  const showNotes = document.getElementById("showNotes");
+  const notesDisplay = document.getElementById("notesDisplay");
+  const clearNotes = document.getElementById("clearNotes");
+  const clearChatHistoryBtn = document.getElementById("clearChatHistory");
+  const toggleAutoConfirmBtn = document.getElementById('toggleAutoConfirmBtn');
+
+  // Setup event listeners
+  if (saveApiKey) {
+    saveApiKey.onclick = () => {
+      const key = geminiApiKey.value.trim();
+      if (key) {
+        localStorage.setItem('geminiApiKey', key);
+        App.settings.geminiApiKey = key;
+        apiStatus.textContent = "Custom API key saved";
+        apiStatus.style.color = "#4CAF50";
+        sendToWorker({ type: 'save_settings', geminiApiKey: key });
+      }
+    };
+  }
+
+  if (useDefaultKey) {
+    useDefaultKey.onclick = () => {
+      localStorage.removeItem('geminiApiKey');
+      App.settings.geminiApiKey = "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4";
+      geminiApiKey.value = "";
+      apiStatus.textContent = "Using default API key";
+      apiStatus.style.color = "#FFA500";
+      sendToWorker({ type: 'save_settings', geminiApiKey: App.settings.geminiApiKey });
+    };
+  }
+
+  if (showNotes) {
+    showNotes.onclick = () => {
+      if (notesDisplay.style.display === "none") {
+        sendToWorker({type:'debug', action:'get_notes'});
+        showNotes.textContent = "Hide Notes";
+      } else {
+        showNotes.textContent = "Show Notes (Debug)";
+        notesDisplay.style.display = "none";
+      }
+    };
+  }
+
+  if (clearNotes) {
+    clearNotes.onclick = () => {
+      if (confirm("DANGER: This will permanently delete all notes. Are you sure?")) {
+        sendToWorker({type:'debug', action:'clear_notes'});
+      }
+    };
+  }
+
+  if (clearChatHistoryBtn) {
+    clearChatHistoryBtn.onclick = () => {
+      if (confirm("Are you sure you want to clear the chat history?")) {
+        clearChatHistory();
+      }
+    };
+  }
+
+  if (toggleAutoConfirmBtn) {
+    toggleAutoConfirmBtn.onclick = () => GlobalAutoConfirm.toggle();
+  }
+
+  // Load settings
+  loadStoredApiKey();
+  GlobalAutoConfirm.loadFromStorage();
+}
+
+function sendToWorker(messageObject) {
+  console.log('sendToWorker called with:', messageObject);
+  console.log('SharedUtils available:', !!window.SharedUtils);
+  console.log('SharedUtils.sendToWorker available:', !!(window.SharedUtils && window.SharedUtils.sendToWorker));
+  if (window.SharedUtils && window.SharedUtils.sendToWorker) {
+    window.SharedUtils.sendToWorker(messageObject);
+  } else {
+    console.error('SharedUtils.sendToWorker not available');
+  }
+}
+
+function loadStoredApiKey() {
+  const geminiApiKey = document.getElementById("geminiApiKey");
+  const apiStatus = document.getElementById("apiStatus");
+  
+  const storedKey = localStorage.getItem('geminiApiKey');
+  if (storedKey) {
+    if (geminiApiKey) geminiApiKey.value = storedKey;
+    if (window.SharedUtils && window.SharedUtils.settings) {
+      window.SharedUtils.settings.geminiApiKey = storedKey;
+    } else {
+      console.error('SharedUtils.settings not available for API key');
+    }
+    if (apiStatus) {
+      apiStatus.textContent = "Using custom API key";
+      apiStatus.style.color = "#4CAF50";
+    }
+  } else {
+    if (apiStatus) {
+      apiStatus.textContent = "Using default API key";
+      apiStatus.style.color = "#FFA500";
+    }
+  }
+}
+
+function clearChatHistory() {
+  localStorage.removeItem('chatHistory');
+}
+
+// Register WebSocket handlers for settings page
+if (window.SharedWebSocket) {
+  SharedWebSocket.registerHandler('debug_notes', (data) => {
+    const notesDisplay = document.getElementById("notesDisplay");
+    if (notesDisplay) {
+      notesDisplay.textContent = data.notes;
+      notesDisplay.style.display = "block";
+    }
+  });
+  
+  SharedWebSocket.registerHandler('debug_cleared', (data) => {
+    const notesDisplay = document.getElementById("notesDisplay");
+    const showNotes = document.getElementById("showNotes");
+    if (notesDisplay) notesDisplay.style.display = "none";
+    if (showNotes) showNotes.textContent = "Show Notes (Debug)";
+  });
+  
+  SharedWebSocket.registerHandler('auto_confirm_status', (data) => {
+    GlobalAutoConfirm.enabled = data.enabled;
+    if (window.SharedUtils && window.SharedUtils.settings) {
+      window.SharedUtils.settings.autoConfirm = data.enabled;
+    } else {
+      console.error('SharedUtils.settings not available in WebSocket handler');
+    }
+    GlobalAutoConfirm.updateUI();
+  });
+}
+</script>
