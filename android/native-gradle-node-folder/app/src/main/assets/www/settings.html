@@ -250,18 +250,21 @@ function sendToWorker(messageObject) {
     SharedWebSocket.send(messageObject);
 }
 
-function initializeServiceWorker() {
+function initializeWebSocket() {
     // Use shared WebSocket instead of direct service worker communication
+    SharedWebSocket.registerHandler('ws_connecting', () => {
+        updateConnectionStatus('CONNECTING');
+    });
     SharedWebSocket.registerHandler('ws_open', () => {
-        updateConnectionStatus(true);
+        updateConnectionStatus('OPEN');
     });
     
     SharedWebSocket.registerHandler('ws_close', () => {
-        updateConnectionStatus(false);
+        updateConnectionStatus('CLOSED');
     });
     
     SharedWebSocket.registerHandler('ws_error', () => {
-        updateConnectionStatus(false);
+        updateConnectionStatus('CLOSED');
     });
     
     SharedWebSocket.registerHandler('debug_notes', (data) => {
@@ -286,16 +289,23 @@ function initializeServiceWorker() {
     });
 }
 
-function updateConnectionStatus(connected) {
+function updateConnectionStatus(state) {
   const statusLed = document.getElementById('statusLed');
   const statusText = document.getElementById('statusText');
   if (!statusLed || !statusText) return;
-  if (connected) {
-    statusLed.className = 'connection-led connected';
-    statusText.textContent = 'Connected';
-  } else {
-    statusLed.className = 'connection-led disconnected';
-    statusText.textContent = 'Connecting...';
+  switch (state) {
+    case 'OPEN':
+      statusLed.className = 'connection-led connected';
+      statusText.textContent = 'Connected';
+      break;
+    case 'CONNECTING':
+      statusLed.className = 'connection-led connecting';
+      statusText.textContent = 'Connecting...';
+      break;
+    case 'CLOSED':
+      statusLed.className = 'connection-led disconnected';
+      statusText.textContent = 'Disconnected';
+      break;
   }
 }
 
@@ -311,7 +321,7 @@ function initializeSettings() {
 
 /* ---------- Page Load ---------- */
 initializeSettings();
-initializeServiceWorker();
+initializeWebSocket();
 
 </script>
 </body>

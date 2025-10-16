@@ -158,16 +158,24 @@ function loadCommandHistory() {
 
 function getCommandHistory() { return commandHistory; }
 
-function updateConnectionStatus(connected) {
+function updateConnectionStatus(state) {
   const statusLed = document.getElementById('statusLed');
   const statusText = document.getElementById('statusText');
   if (!statusLed || !statusText) return;
-  if (connected) {
-    statusLed.className = 'connection-led connected';
-    statusText.textContent = 'Connected';
-  } else {
-    statusLed.className = 'connection-led disconnected';
-    statusText.textContent = 'Connecting...';
+
+  switch (state) {
+    case 'OPEN':
+      statusLed.className = 'connection-led connected';
+      statusText.textContent = 'Connected';
+      break;
+    case 'CONNECTING':
+      statusLed.className = 'connection-led connecting';
+      statusText.textContent = 'Connecting...';
+      break;
+    case 'CLOSED':
+      statusLed.className = 'connection-led disconnected';
+      statusText.textContent = 'Disconnected';
+      break;
   }
 }
 
@@ -296,18 +304,33 @@ function sendToWorker(messageObject) {
     SharedWebSocket.send(messageObject);
 }
 
-function initializeServiceWorker() {
-    // Use shared WebSocket instead of direct service worker communication
+function initializeWebSocket() {
+    // Renamed from initializeServiceWorker
+    SharedWebSocket.registerHandler('ws_connecting', () => {
+        updateConnectionStatus('CONNECTING');
+    });
+
     SharedWebSocket.registerHandler('ws_open', (data) => {
-        updateConnectionStatus(true);
+        updateConnectionStatus('OPEN');
         loadAvailableCommands();
-        handleUrlParameters();
-        const savedNoteId = localStorage.getItem('currentNoteId');
-        if (savedNoteId) SharedWebSocket.send({ type: 'restore_context', noteId: savedNoteId });
+
+        const findbyid = new URLSearchParams(window.location.search).get('findbyid');
+        if (findbyid) {
+            // If there's a findbyid parameter, use it and don't restore from localStorage
+            localStorage.removeItem('currentNoteId');
+            addMsg(`Auto-finding note ID: ${findbyid}`, 'sys');
+            SharedWebSocket.send({ type: 'chat', text: `/findbyid ${findbyid}`, lang: Settings.lang, autoConfirm: true });
+        } else {
+            // Otherwise, restore from localStorage
+            const savedNoteId = localStorage.getItem('currentNoteId');
+            if (savedNoteId) {
+                SharedWebSocket.send({ type: 'restore_context', noteId: savedNoteId });
+            }
+        }
     });
     
     SharedWebSocket.registerHandler('ws_close', (data) => {
-        updateConnectionStatus(false);
+        updateConnectionStatus('CLOSED');
     });
     
     SharedWebSocket.registerHandler('ws_error', (data) => {
@@ -437,14 +460,6 @@ async function speakText(text) {
   }
 }
 
-/* ---------- URL Parameter Handling ---------- */
-function handleUrlParameters() {
-  const findbyid = new URLSearchParams(window.location.search).get('findbyid');
-  if (findbyid) {
-    addMsg(`Auto-finding note ID: ${findbyid}`, 'sys');
-    SharedWebSocket.send({ type: 'chat', text: `/findbyid ${findbyid}`, lang: Settings.lang, autoConfirm: true });
-  }
-}
 
 /* ---------- Thinking Indicator ---------- */
 let thinkingInterval = null, thinkingDots = 0, thinkingMsg = null;
@@ -523,7 +538,7 @@ function hideTipAfterDelay() {
 /* ---------- Page Load ---------- */
 initializeSettings();
 loadCommandHistory();
-initializeServiceWorker();
+initializeWebSocket();
 hideTipAfterDelay();
 
 /* ---------- Upload Modal ---------- */

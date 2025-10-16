@@ -220,11 +220,11 @@ function deleteNote(noteId) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  initializeServiceWorker();
+  initializeWebSocket();
   setupEventListeners();
 });
 
-function initializeServiceWorker() {
+function initializeWebSocket() {
     // Use shared WebSocket instead of direct service worker communication
     SharedWebSocket.registerHandler('ws_open', () => {
         loadNotes();

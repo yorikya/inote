@@ -1,191 +1,166 @@
 /**
  * Shared WebSocket Client
- * Provides a persistent WebSocket connection across all pages
- * Uses Service Worker to maintain connection even when pages are navigated
+ *
+ * A robust and resilient WebSocket client with automatic reconnection,
+ * message queuing, and exponential backoff.
  */
-
 class SharedWebSocketClient {
-  constructor() {
-    this.connected = false;
-    this.messageHandlers = new Map();
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 1000;
-    this.serviceWorkerReady = false;
-    this.init();
-  }
+    constructor(url) {
+        this.url = url;
+        this.ws = null;
+        this.messageHandlers = new Map();
+        this.messageQueue = [];
+        this.reconnectAttempts = 0;
+        this.maxReconnectDelay = 30000; // 30 seconds
+        this.baseReconnectDelay = 1000; // 1 second
+        this.state = 'CLOSED'; // States: CONNECTING, OPEN, CLOSED
 
-  init() {
-    // Register service worker if not already registered
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js').then(reg => {
-        console.log('Service Worker registered for SharedWebSocket:', reg);
-        this.serviceWorkerReady = true;
-        this.requestConnectionStatus();
-      }).catch(err => {
-        console.error('Service Worker registration failed:', err);
-        this.fallbackToDirectConnection();
-      });
+        this.connect();
 
-      // Listen for messages from service worker
-      navigator.serviceWorker.addEventListener('message', event => {
-        this.handleServiceWorkerMessage(event);
-      });
-
-      // Listen for service worker controller changes
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        this.serviceWorkerReady = true;
-        this.requestConnectionStatus();
-      });
-    } else {
-      console.warn('Service Workers not supported, falling back to direct connection');
-      this.fallbackToDirectConnection();
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log('Page is now visible, checking WebSocket connection.');
+                if (this.state !== 'OPEN') {
+                    this.connect();
+                }
+            }
+        });
     }
-  }
 
-  fallbackToDirectConnection() {
-    // Fallback to direct WebSocket connection if service worker is not available
-    console.log('Using fallback direct WebSocket connection');
-    this.connectDirectly();
-  }
-
-  connectDirectly() {
-    // This would be used if service worker is not available
-    // For now, we'll rely on the service worker approach
-    console.log('Direct connection not implemented, using service worker approach');
-  }
-
-  requestConnectionStatus() {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage('REQUEST_WS_STATUS');
-    }
-  }
-
-  handleServiceWorkerMessage(event) {
-    try {
-      const msg = JSON.parse(event.data);
-      console.log("SharedWebSocket: Received message:", msg.type, msg);
-
-      switch (msg.type) {
-        case 'ws_open':
-          this.connected = true;
-          this.reconnectAttempts = 0;
-          this.notifyHandlers('ws_open', msg);
-          break;
-        case 'ws_close':
-          this.connected = false;
-          this.notifyHandlers('ws_close', msg);
-          this.attemptReconnect();
-          break;
-        case 'ws_error':
-          this.connected = false;
-          this.notifyHandlers('ws_error', msg);
-          this.attemptReconnect();
-          break;
-        default:
-          this.notifyHandlers(msg.type, msg);
-      }
-    } catch (error) {
-      console.log("SharedWebSocket: Received non-JSON message:", event.data, error);
-      this.notifyHandlers('raw_message', event.data);
-    }
-  }
-
-  attemptReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      setTimeout(() => {
-        this.requestConnectionStatus();
-      }, this.reconnectDelay * this.reconnectAttempts);
-    } else {
-      console.error('Max reconnection attempts reached');
-    }
-  }
-
-  send(messageObject) {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage(JSON.stringify(messageObject));
-    } else {
-      console.error("Service worker not in control. Cannot send message.");
-      // Store message for retry when connection is restored
-      this.storeMessageForRetry(messageObject);
-    }
-  }
-
-  storeMessageForRetry(messageObject) {
-    // Store messages in localStorage for retry when connection is restored
-    const storedMessages = JSON.parse(localStorage.getItem('pendingMessages') || '[]');
-    storedMessages.push({
-      message: messageObject,
-      timestamp: Date.now()
-    });
-    localStorage.setItem('pendingMessages', JSON.stringify(storedMessages));
-  }
-
-  retryStoredMessages() {
-    const storedMessages = JSON.parse(localStorage.getItem('pendingMessages') || '[]');
-    if (storedMessages.length > 0) {
-      console.log(`Retrying ${storedMessages.length} stored messages`);
-      storedMessages.forEach(({ message }) => {
-        this.send(message);
-      });
-      localStorage.removeItem('pendingMessages');
-    }
-  }
-
-  registerHandler(messageType, handler) {
-    if (!this.messageHandlers.has(messageType)) {
-      this.messageHandlers.set(messageType, []);
-    }
-    this.messageHandlers.get(messageType).push(handler);
-  }
-
-  unregisterHandler(messageType, handler) {
-    const handlers = this.messageHandlers.get(messageType);
-    if (handlers) {
-      const index = handlers.indexOf(handler);
-      if (index > -1) {
-        handlers.splice(index, 1);
-      }
-    }
-  }
-
-  notifyHandlers(messageType, data) {
-    const handlers = this.messageHandlers.get(messageType);
-    if (handlers) {
-      handlers.forEach(handler => {
-        try {
-          handler(data);
-        } catch (error) {
-          console.error('Error in message handler:', error);
+    connect() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            return;
         }
-      });
+
+        this.state = 'CONNECTING';
+        this.notifyHandlers('ws_connecting', {});
+
+        try {
+            this.ws = new WebSocket(this.url);
+        } catch (error) {
+            console.error('WebSocket instantiation failed:', error);
+            this.handleConnectionClose();
+            return;
+        }
+
+        this.ws.onopen = () => {
+            this.state = 'OPEN';
+            this.reconnectAttempts = 0;
+            console.log('WebSocket connected');
+            this.notifyHandlers('ws_open', {});
+            this.flushMessageQueue();
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                this.notifyHandlers(msg.type, msg);
+            } catch (error) {
+                this.notifyHandlers('raw_message', event.data);
+            }
+        };
+
+        this.ws.onclose = (event) => {
+            console.log(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`);
+            this.handleConnectionClose();
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            // The onclose event will be fired next, which will handle reconnection.
+        };
     }
-  }
 
-  isConnected() {
-    return this.connected;
-  }
+    handleConnectionClose() {
+        this.ws = null;
+        if (this.state !== 'CLOSED') {
+            this.state = 'CLOSED';
+            this.notifyHandlers('ws_close', {});
+        }
+        this.scheduleReconnect();
+    }
 
-  getConnectionStatus() {
-    return {
-      connected: this.connected,
-      serviceWorkerReady: this.serviceWorkerReady,
-      reconnectAttempts: this.reconnectAttempts
-    };
-  }
+    scheduleReconnect() {
+        if (this.reconnectAttempts > 0) {
+            // If we've already tried to reconnect, don't schedule another one immediately.
+            return;
+        }
+        this.reconnectAttempts++;
+        const delay = this.getReconnectDelay();
+        console.log(`Scheduling reconnect in ${delay}ms`);
+
+        setTimeout(() => {
+            this.reconnectAttempts = 0; // Reset for the next attempt
+            this.connect();
+        }, delay);
+    }
+
+    getReconnectDelay() {
+        // Exponential backoff with jitter
+        const exponentialBackoff = this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts);
+        const jitter = exponentialBackoff * 0.3 * Math.random();
+        return Math.min(this.maxReconnectDelay, exponentialBackoff + jitter);
+    }
+
+    send(messageObject) {
+        const message = JSON.stringify(messageObject);
+        if (this.state === 'OPEN' && this.ws) {
+            this.ws.send(message);
+        } else {
+            console.log('WebSocket not open. Queuing message.');
+            this.messageQueue.push(message);
+        }
+    }
+
+    flushMessageQueue() {
+        console.log(`Flushing ${this.messageQueue.length} queued messages.`);
+        while (this.messageQueue.length > 0) {
+            const message = this.messageQueue.shift();
+            this.send(JSON.parse(message));
+        }
+    }
+
+    registerHandler(messageType, handler) {
+        if (!this.messageHandlers.has(messageType)) {
+            this.messageHandlers.set(messageType, []);
+        }
+        this.messageHandlers.get(messageType).push(handler);
+    }
+
+    unregisterHandler(messageType, handler) {
+        const handlers = this.messageHandlers.get(messageType);
+        if (handlers) {
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+                handlers.splice(index, 1);
+            }
+        }
+    }
+
+    notifyHandlers(messageType, data) {
+        const handlers = this.messageHandlers.get(messageType);
+        if (handlers) {
+            handlers.forEach(handler => {
+                try {
+                    handler(data);
+                } catch (error) {
+                    console.error(`Error in '${messageType}' handler:`, error);
+                }
+            });
+        }
+    }
+
+    getState() {
+        return this.state;
+    }
 }
 
-// Create global instance
-window.SharedWebSocket = new SharedWebSocketClient();
-
-// Auto-retry stored messages when connection is restored
-window.SharedWebSocket.registerHandler('ws_open', () => {
-  window.SharedWebSocket.retryStoredMessages();
-});
+// Create a global instance of the WebSocket client.
+// The URL is constructed dynamically based on the page's hostname.
+const wsUrl = `ws://${window.location.hostname}:30000`;
+window.SharedWebSocket = new SharedWebSocketClient(wsUrl);
 
 // Export for module systems if needed
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = SharedWebSocketClient;
+    module.exports = SharedWebSocketClient;
 }
