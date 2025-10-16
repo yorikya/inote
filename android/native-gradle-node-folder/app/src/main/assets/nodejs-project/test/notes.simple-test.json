@@ -2,14 +2,17 @@
   "notes": [
     {
       "id": "1",
-      "title": "Test Note Auto Update 10022",
+      "title": "Test Note AI 10019",
       "description": "",
       "parent_id": null,
       "done": false,
       "images": [],
       "deleted": false,
-      "creation_date": "2025-10-09T11:07:11.889Z"
+      "creation_date": "2025-10-16T06:51:34.076Z"
     }
   ],
-  "latestNoteId": 1
+  "latestNoteId": 1,
+  "settings": {
+    "gemini_api_key": "test-key"
+  }
 }

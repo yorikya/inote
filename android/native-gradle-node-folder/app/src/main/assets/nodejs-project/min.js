@@ -218,9 +218,15 @@ function handleCreateNoteCommand(ws, parsed, autoConfirm) {
     const tree = formatNoteTree(newNote, []);
     send(ws, { type: 'reply', text: `✨ New note created:
 
-${tree}
-
-🤔 What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai)` });
+${tree}` });
+    
+    // Return to main menu after note creation
+    StateManager.setState(ws, {
+      mode: 'initial',
+      findContext: { selectedNote: null, results: [] }
+    });
+    
+    sendUpdatedCommands(ws);
   } else {
     StateManager.setState(ws, {
       mode: 'pending_confirmation',
@@ -299,7 +305,50 @@ function handleShowParentsCommand(ws) {
   }
 }
 
+// Helper function to check if command needs parameter collection
+function needsParameterCollection(ws, parsed) {
+  const availableCommands = CommandRouter.getAvailableCommands(ws, StateManager);
+  const commandInfo = availableCommands.find(cmd => cmd.command === parsed.cmd);
+  
+  if (commandInfo && commandInfo.requiresParam) {
+    const hasParams = parsed.args && parsed.args.length > 0 && parsed.args.join(' ').trim() !== '';
+    return !hasParams;
+  }
+  return false;
+}
+
+// Helper function to start parameter collection
+function startParameterCollection(ws, command, message) {
+  StateManager.setState(ws, {
+    mode: 'parameter_collection',
+    parameterCollection: {
+      command: command,
+      message: message
+    }
+  });
+  sendUpdatedCommands(ws);
+  send(ws, { type: 'reply', text: message });
+}
+
 async function processCommandWithParsed(ws, parsed, autoConfirm) {
+  // Check if command needs parameter collection
+  if (needsParameterCollection(ws, parsed)) {
+    switch (parsed.cmd) {
+      case '/createnote':
+        startParameterCollection(ws, '/createnote', 'Please provide a title for the note:');
+        return;
+      case '/findnote':
+        startParameterCollection(ws, '/findnote', 'Please provide a search query to find notes:');
+        return;
+      case '/findbyid':
+        startParameterCollection(ws, '/findbyid', 'Please provide a note ID to find:');
+        return;
+      case '/set-gemini-api-key':
+        startParameterCollection(ws, '/set-gemini-api-key', 'Please provide the Gemini API key:');
+        return;
+    }
+  }
+
   switch (parsed.cmd) {
     case '/createnote':
       handleCreateNoteCommand(ws, parsed, autoConfirm);
@@ -340,15 +389,12 @@ async function handleConfirmationAction(ws, action, data, autoConfirm) {
       const tree = formatNoteTree(newNote, children);
       send(ws, { type: 'reply', text: `✅ Note created successfully!\n\n${tree}` });
       
-      // Set context for newly created note
+      // Return to main menu after note creation
       StateManager.setState(ws, {
-        mode: 'find_context',
-        findContext: { selectedNote: newNote, results: [newNote] }
+        mode: 'initial',
+        findContext: { selectedNote: null, results: [] }
       });
       
-      const followUpText = `🤔 What would you like to do with this note? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete, /talkai)`;
-      
-      send(ws, { type: 'reply', text: followUpText });
       sendUpdatedCommands(ws);
       return true; // Don't reset state
     }
@@ -729,6 +775,30 @@ function handleFindContextCommands(ws, parsed, state, autoConfirm) {
         sendUpdatedCommands(ws);
         send(ws, { type: 'reply', text: `What is the title of the sub-note for '${parentNote.title}'?` });
       }
+      return true;
+
+    case '/selectsubnote':
+      const subnoteId = parsed.args[0];
+      if (!subnoteId) {
+        send(ws, { type: 'reply', text: 'Please provide a sub-note ID to select.' });
+        return true;
+      }
+
+      // Find the sub-note
+      const subnote = NoteManager.findById(subnoteId)[0];
+      if (!subnote) {
+        send(ws, { type: 'reply', text: `Sub-note with ID ${subnoteId} not found.` });
+        return true;
+      }
+
+      // Update state to select the sub-note
+      StateManager.setState(ws, {
+        mode: 'find_context',
+        findContext: { selectedNote: subnote, results: [subnote] }
+      });
+      
+      send(ws, { type: 'reply', text: `Selected sub-note '${subnote.title}' 🔗ID: ${subnote.id}. What would you like to do? (/editdescription, /uploadimage, /createsubnote, /markdone, /delete)` });
+      sendUpdatedCommands(ws);
       return true;
 
     case '/deleteimage':

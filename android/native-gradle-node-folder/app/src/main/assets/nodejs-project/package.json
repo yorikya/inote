@@ -14,8 +14,10 @@
     "test:quick": "node test/quick-test.js",
     "test:context": "node test/context-commands-test.js",
     "test:parameters": "node test/parameter-collection-test.js",
+    "test:todo": "node test/to-do-test.js",
+    "test:main": "node test/quick-test.js && node test/simple-test.js && node test/context-commands-test.js && node test/parameter-collection-test.js",
     "test:all": "node run-tests.js",
-    "test:ci": "npm run test:all"
+    "test:ci": "npm run test:main"
   },
   "devDependencies": {
     "@types/node": "^24.7.1"

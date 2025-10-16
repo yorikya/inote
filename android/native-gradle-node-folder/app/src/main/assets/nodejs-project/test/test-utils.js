@@ -42,7 +42,8 @@ async function withIsolatedServer(testSuite, testFn, options = {}) {
     cleanupTestData(testSuite);
     
     // Start server with unique port and test suite
-    const serverProcess = spawn('node', [path.join(__dirname, '../min.js')], {
+    const nodePath = process.execPath; // Use the same Node.js that's running the tests
+    const serverProcess = spawn(nodePath, [path.join(__dirname, '../min.js')], {
         env: { 
             ...process.env, 
             NODE_PORT: port.toString(), 
@@ -112,7 +113,7 @@ async function createWebSocketConnection(port, maxRetries = 5) {
     for (let i = 0; i < maxRetries; i++) {
         try {
             console.log(`Attempting WebSocket connection to port ${port} (attempt ${i + 1})`);
-            const ws = new WebSocket(`ws://localhost:${port}`);
+            const ws = new WebSocket(`ws://127.0.0.1:${port}`);
             
             await new Promise((resolve, reject) => {
                 const timer = setTimeout(() => {

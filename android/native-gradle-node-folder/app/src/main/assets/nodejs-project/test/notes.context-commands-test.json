@@ -2,14 +2,15 @@
   "notes": [
     {
       "id": "1",
-      "title": "Test Note Edit 1759991439252",
+      "title": "Test Note Edit 1760597508218",
       "description": "",
       "parent_id": null,
       "done": false,
       "images": [],
       "deleted": false,
-      "creation_date": "2025-10-09T06:30:39.254Z"
+      "creation_date": "2025-10-16T06:51:48.220Z"
     }
   ],
-  "latestNoteId": 1
+  "latestNoteId": 1,
+  "settings": {}
 }

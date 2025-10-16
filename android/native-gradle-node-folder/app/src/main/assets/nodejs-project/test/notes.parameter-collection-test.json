@@ -2,14 +2,15 @@
   "notes": [
     {
       "id": "1",
-      "title": "Shopping List 1759991457274",
+      "title": "Shopping List 1760597526870",
       "description": "",
       "parent_id": null,
       "done": false,
       "images": [],
       "deleted": false,
-      "creation_date": "2025-10-09T06:30:57.277Z"
+      "creation_date": "2025-10-16T06:52:06.873Z"
     }
   ],
-  "latestNoteId": 1
+  "latestNoteId": 1,
+  "settings": {}
 }
