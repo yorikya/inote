@@ -99,6 +99,7 @@
         <button id="resetCounters" class="secondary" style="background:#ff6b35;">🔄 Reset Counters</button>
         <button id="refreshStats" class="secondary" style="background:#4CAF50;">🔄 Refresh Stats</button>
         <button id="downloadLogs" class="secondary" style="background:#2d5a87;">📥 Download Logs</button>
+        <button id="viewLogs" class="secondary" style="background:#9C27B0;">👁️ View Logs</button>
       </div>
     </div>
 
@@ -109,6 +110,16 @@
         <button id="clearNotes" class="secondary" style="background:#ff4444;">🗑️ Clear All Notes (DANGER)</button>
       </div>
       <div id="notesDisplay" style="margin-top:10px; padding:10px; background:#2a2f36; border-radius:6px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:12px; white-space:pre-wrap; display:none;"></div>
+    </div>
+
+    <div class="settings-section" id="logDisplaySection" style="display:none;">
+      <h3>Application Logs</h3>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button id="copyLogs" class="secondary" style="background:#4CAF50;">📋 Copy Logs</button>
+        <button id="clearLogs" class="secondary" style="background:#ff6b35;">🗑️ Clear Logs</button>
+        <button id="closeLogs" class="secondary" style="background:#666;">✕ Close</button>
+      </div>
+      <div id="logDisplay" style="padding:10px; background:#1a1a1a; border-radius:6px; max-height:400px; overflow-y:auto; font-family:monospace; font-size:11px; white-space:pre-wrap; color:#fff; border:1px solid #333;"></div>
     </div>
   </div>
 
@@ -199,6 +210,12 @@ const successRate = document.getElementById("successRate");
 const resetCounters = document.getElementById("resetCounters");
 const refreshStats = document.getElementById("refreshStats");
 const downloadLogs = document.getElementById("downloadLogs");
+const viewLogs = document.getElementById("viewLogs");
+const logDisplaySection = document.getElementById("logDisplaySection");
+const logDisplay = document.getElementById("logDisplay");
+const copyLogs = document.getElementById("copyLogs");
+const clearLogs = document.getElementById("clearLogs");
+const closeLogs = document.getElementById("closeLogs");
 
 langSel.onchange = () => {
   Settings.lang = langSel.value;
@@ -358,13 +375,49 @@ resetCounters.onclick = () => {
 };
 
 downloadLogs.onclick = () => {
-  // Download logs from the server
-  const link = document.createElement('a');
-  link.href = `http://localhost:30000/logs/download`;
-  link.download = 'app-logs.txt';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // Download logs from the server with mobile compatibility
+  const timestamp = new Date().toISOString().split('T')[0];
+  const filename = `app-logs-${timestamp}.txt`;
+  
+  // Check if we're in a mobile app environment
+  const isMobile = navigator.userAgent.includes('Mobile') || 
+                   navigator.userAgent.includes('Android') || 
+                   navigator.userAgent.includes('iPhone') ||
+                   window.navigator.standalone === true;
+  
+  if (isMobile) {
+    // For mobile apps, use direct URL navigation which should trigger WebView download
+    const downloadUrl = `http://localhost:30000/logs/download`;
+    window.open(downloadUrl, '_blank');
+    
+    // Show user feedback
+    setTimeout(() => {
+      alert('Log file download initiated. Check your Downloads folder or browser downloads.');
+    }, 500);
+  } else {
+    // For desktop browsers, use blob download
+    fetch('http://localhost:30000/logs/download')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.blob();
+      })
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(error => {
+        console.error('Error downloading logs:', error);
+        alert('Error downloading logs: ' + error.message);
+      });
+  }
 };
 
 refreshStats.onclick = () => {
@@ -380,6 +433,80 @@ refreshStats.onclick = () => {
     .catch(error => {
       console.error('[AI_STATS] Error fetching stats:', error);
     });
+};
+
+viewLogs.onclick = () => {
+  // Fetch and display logs
+  fetch('http://localhost:30000/logs/download')
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.text();
+    })
+    .then(logText => {
+      logDisplay.textContent = logText;
+      logDisplaySection.style.display = 'block';
+      // Scroll to top
+      logDisplay.scrollTop = 0;
+    })
+    .catch(error => {
+      console.error('Error fetching logs:', error);
+      logDisplay.textContent = 'Error fetching logs: ' + error.message;
+      logDisplaySection.style.display = 'block';
+    });
+};
+
+copyLogs.onclick = () => {
+  // Copy logs to clipboard
+  const logText = logDisplay.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(logText).then(() => {
+      alert('Logs copied to clipboard!');
+    }).catch(err => {
+      console.error('Failed to copy logs:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = logText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Logs copied to clipboard!');
+    });
+  } else {
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = logText;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    alert('Logs copied to clipboard!');
+  }
+};
+
+clearLogs.onclick = () => {
+  if (confirm('Are you sure you want to clear all application logs?')) {
+    fetch('http://localhost:30000/logs/clear', { method: 'POST' })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          alert('Logs cleared successfully!');
+          logDisplay.textContent = 'Logs cleared.';
+        } else {
+          alert('Failed to clear logs.');
+        }
+      })
+      .catch(error => {
+        console.error('Error clearing logs:', error);
+        alert('Error clearing logs: ' + error.message);
+      });
+  }
+};
+
+closeLogs.onclick = () => {
+  logDisplaySection.style.display = 'none';
 };
 
 function sendToWorker(messageObject) {
