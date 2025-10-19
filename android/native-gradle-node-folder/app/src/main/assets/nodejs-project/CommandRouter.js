@@ -75,6 +75,15 @@ function getAvailableCommands(ws, stateManager) {
     ];
   }
   
+  // If in AI command confirmation mode, return confirmation commands
+  if (state.mode === 'ai_command_confirmation') {
+    return [
+      { action: 'confirm_yes', command: 'yes', category: 'Confirmation', description: 'Confirm and execute AI proposed commands', examples: ['yes'], requiresParam: false },
+      { action: 'confirm_no', command: 'no', category: 'Confirmation', description: 'Cancel AI proposed commands', examples: ['no'], requiresParam: false },
+      { action: 'slash_back', command: '/back', category: 'Navigation', description: 'Return to main menu', examples: ['/back'], requiresParam: false }
+    ];
+  }
+  
   // Default fallback - return main menu commands
   return [
     { action: 'slash_create_note', command: '/createnote', category: 'Create', description: 'Create a note', examples: ['/createnote groceries'], requiresParam: true },

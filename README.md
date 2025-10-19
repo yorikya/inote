@@ -12,6 +12,7 @@ The primary goal of **Note Speaker** is to provide a seamless and intelligent no
 - **Conversational Note Management**: Create, edit, and organize notes through natural language commands.
 - **Hierarchical Organization**: Support parent-child note relationships for complex project management.
 - **AI-Powered Assistance**: Provide contextual help and suggestions using the Gemini API.
+- **Local AI Commands**: Process free-text commands like "create subnote milk under shopping list" using local Ollama LLM.
 - **Visual and Voice Interface**: Combine a chat-based interface with a visual note explorer.
 - **Real-time Synchronization**: Maintain a live connection between the frontend and the backend.
 

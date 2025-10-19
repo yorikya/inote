@@ -19,8 +19,59 @@ const CommandRouter = require('./CommandRouter');
 const AIService = require('./AIService');
 const StateManager = require('./StateManager');
 const ImageManager = require('./ImageManager');
+const LocalAICommandAgent = require('./LocalAICommandAgent');
+const EnhancedAICommandAgent = require('./EnhancedAICommandAgent');
+const CommandProcessor = require('./CommandProcessor');
+const logger = require('./Logger');
 
 const aiService = new AIService(NoteManager.getSetting('gemini_api_key'));
+const aiCommandAgent = new LocalAICommandAgent();
+const enhancedAICommandAgent = new EnhancedAICommandAgent(NoteManager.getSetting('gemini_api_key'));
+
+// AI Action Statistics
+const AIStats = {
+  success: 0,
+  failure: 0,
+  
+  incrementSuccess: function() {
+    this.success++;
+    logger.aiAction(`AI Action Success: ${this.success}`);
+    console.log(`[AI_STATS] Success incremented to: ${this.success}`);
+    this.broadcastStats();
+  },
+  
+  incrementFailure: function() {
+    this.failure++;
+    logger.aiAction(`AI Action Failure: ${this.failure}`);
+    console.log(`[AI_STATS] Failure incremented to: ${this.failure}`);
+    this.broadcastStats();
+  },
+  
+  broadcastStats: function() {
+    // Broadcast to all connected clients
+    console.log(`[AI_STATS] Broadcasting stats: success=${this.success}, failure=${this.failure}`);
+    wss.clients.forEach(client => {
+      if (client.readyState === client.OPEN) {
+        const message = JSON.stringify({
+          type: 'ai_stats_update',
+          success: this.success,
+          failure: this.failure
+        });
+        console.log(`[AI_STATS] Sending to client: ${message}`);
+        client.send(message);
+      }
+    });
+  },
+  
+  getStats: function() {
+    return {
+      success: this.success,
+      failure: this.failure,
+      total: this.success + this.failure,
+      successRate: this.success + this.failure > 0 ? Math.round((this.success / (this.success + this.failure)) * 100) : 0
+    };
+  }
+};
 
 // Add this helper function near the top of the file
 async function fetchGoogleTTS(text, lang) {
@@ -51,6 +102,65 @@ const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url);
   const p = parsedUrl.pathname;
   
+  
+  // Serve log files
+  if (p === '/logs/download') {
+    try {
+      const logContent = logger.getCombinedLogContent();
+      res.writeHead(200, {
+        'Content-Type': 'text/plain',
+        'Content-Disposition': 'attachment; filename="app-logs.txt"',
+        'Content-Length': Buffer.byteLength(logContent)
+      });
+      res.end(logContent);
+      logger.info('Log file downloaded');
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Error reading log file: ' + error.message);
+      logger.error('Error downloading log file: ' + error.message);
+    }
+    return;
+  }
+  
+  // Serve log statistics
+  if (p === '/logs/stats') {
+    try {
+      const stats = logger.getLogStats();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(stats, null, 2));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Error getting log stats: ' + error.message);
+    }
+    return;
+  }
+  
+  // Clear logs
+  if (p === '/logs/clear' && req.method === 'POST') {
+    try {
+      const success = logger.clearLogs();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success }));
+      logger.info('Logs cleared via HTTP request');
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Error clearing logs: ' + error.message);
+    }
+    return;
+  }
+  
+  // Get AI statistics
+  if (p === '/ai/stats') {
+    try {
+      const stats = AIStats.getStats();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(stats));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Error getting AI stats: ' + error.message);
+    }
+    return;
+  }
   
   // Serve images saved under /image/<rel>
   if (p && p.startsWith('/image/')) {
@@ -367,7 +477,7 @@ async function processCommandWithParsed(ws, parsed, autoConfirm) {
       if (apiKey) {
         NoteManager.setSetting('gemini_api_key', apiKey);
         aiService.apiKey = apiKey;
-        send(ws, { type: 'reply', text: 'Gemini API key set.' });
+        send(ws, { type: 'reply', text: 'Gemini API key set for AI conversations.' });
       } else {
         send(ws, { type: 'reply', text: 'Usage: /set-gemini-api-key <key>' });
       }
@@ -479,6 +589,147 @@ async function handleParameterCollection(ws, text, lowerText, autoConfirm) {
   
   send(ws, { type: 'reply', text: paramInfo.message });
   return true;
+}
+
+// Helper function to handle AI command processing
+async function handleAICommandProcessing(ws, text, lowerText, autoConfirm) {
+  const state = StateManager.getState(ws);
+  
+  // Only process free text in initial mode
+  if (state.mode !== 'initial') {
+    return false;
+  }
+  
+  // Skip if text starts with slash (regular command)
+  if (text.startsWith('/')) {
+    return false;
+  }
+  
+  // Skip empty text
+  if (!text.trim()) {
+    return false;
+  }
+  
+  try {
+    send(ws, { type: 'thinking' });
+    
+    // Log AI action start
+    logger.aiAction(`Processing free text input: "${text}"`);
+    
+    // Get all notes and available commands for context
+    const allNotes = NoteManager.getAll();
+    const availableCommands = CommandRouter.getAvailableCommands(ws, StateManager);
+    
+    // Filter commands to exclude /talkai and /uploadimage
+    const filteredCommands = availableCommands.filter(cmd => 
+      !cmd.command.includes('talkai') && 
+      !cmd.command.includes('uploadimage')
+    );
+    
+    logger.aiAction(`Context: ${allNotes.length} notes, ${filteredCommands.length} commands available`);
+    
+    // Process with Enhanced AI agent (3-stage approach)
+    const aiResponse = await enhancedAICommandAgent.processFreeText(text, allNotes, filteredCommands);
+    
+    logger.aiAction(`AI response: ${JSON.stringify(aiResponse, null, 2)}`);
+    
+    send(ws, { type: 'thinking_done' });
+    
+    // Handle AI response
+    if (aiResponse.error) {
+      send(ws, { type: 'reply', text: aiResponse.error });
+      return true;
+    }
+    
+    if (aiResponse.clarification_needed) {
+      const clarificationMessage = enhancedAICommandAgent.generateConfirmationMessage(aiResponse);
+      send(ws, { type: 'reply', text: clarificationMessage });
+      return true;
+    }
+    
+    // Store proposed commands and show confirmation
+    StateManager.setState(ws, {
+      mode: 'ai_command_confirmation',
+      aiCommandConfirmation: {
+        proposedCommands: aiResponse.commands,
+        currentCommandIndex: 0,
+        originalRequest: text,
+        aiExplanation: aiResponse.understood
+      }
+    });
+    
+    sendUpdatedCommands(ws);
+    
+    const confirmationMessage = enhancedAICommandAgent.generateConfirmationMessage(aiResponse);
+    send(ws, { type: 'reply', text: confirmationMessage });
+    
+    return true;
+  } catch (error) {
+    console.error('AI command processing error:', error);
+    send(ws, { type: 'thinking_done' });
+    send(ws, { type: 'reply', text: 'Failed to process your request with AI. Please try using specific commands.' });
+    return true;
+  }
+}
+
+// Helper function to handle AI command confirmation
+async function handleAICommandConfirmation(ws, text, lowerText, autoConfirm) {
+  const state = StateManager.getState(ws);
+  
+  if (state.mode !== 'ai_command_confirmation') {
+    return false;
+  }
+  
+  const aiConfirmation = state.aiCommandConfirmation;
+  if (!aiConfirmation) {
+    return false;
+  }
+  
+  if (lowerText === 'yes') {
+    // Execute proposed commands using CommandProcessor
+    send(ws, { type: 'reply', text: 'Executing commands...' });
+    
+    logger.aiAction(`User confirmed AI commands: ${JSON.stringify(aiConfirmation.proposedCommands, null, 2)}`);
+    
+    try {
+      const commandProcessor = new CommandProcessor(ws, StateManager, NoteManager);
+      const result = await commandProcessor.processCommandSequence(aiConfirmation.proposedCommands, send, sendUpdatedCommands);
+      
+      logger.aiAction(`Command execution result: ${JSON.stringify(result, null, 2)}`);
+      
+      if (result.success) {
+        send(ws, { type: 'reply', text: 'All commands executed successfully.' });
+        logger.aiAction('All AI commands executed successfully');
+        AIStats.incrementSuccess();
+      } else {
+        send(ws, { type: 'reply', text: 'Some commands failed to execute.' });
+        logger.aiError('Some AI commands failed to execute');
+        AIStats.incrementFailure();
+      }
+      
+      // Return to main menu after execution
+      StateManager.initializeState(ws);
+      sendUpdatedCommands(ws);
+      
+    } catch (error) {
+      console.error('Error executing AI commands:', error);
+      logger.aiError(`Error executing AI commands: ${error.message}`);
+      send(ws, { type: 'reply', text: 'Error executing some commands. Returned to main menu.' });
+      StateManager.initializeState(ws);
+      sendUpdatedCommands(ws);
+    }
+    
+    return true;
+  } else if (lowerText === 'no' || lowerText === '/back') {
+    // Cancel AI commands
+    StateManager.initializeState(ws);
+    sendUpdatedCommands(ws);
+    send(ws, { type: 'reply', text: 'AI commands cancelled. Returned to main menu.' });
+    AIStats.incrementFailure();
+    return true;
+  }
+  
+  return false;
 }
 
 // Helper function to handle state-specific modes
@@ -903,6 +1154,12 @@ async function handleChat(ws, o) {
     }
   }
 
+  // Handle AI command confirmation
+  if (await handleAICommandConfirmation(ws, text, lowerText, autoConfirm)) return;
+
+  // Handle AI command processing (free text in initial mode)
+  if (await handleAICommandProcessing(ws, text, lowerText, autoConfirm)) return;
+
   // Handle other state modes
   if (await handleStateModes(ws, text, lowerText, autoConfirm)) return;
 
@@ -989,6 +1246,11 @@ wss.on('connection', (ws) => {
   console.log('Client connected');
   StateManager.initializeState(ws);
   sendUpdatedCommands(ws);
+  
+  // Send initial AI statistics
+  const stats = AIStats.getStats();
+  console.log(`[AI_STATS] Sending initial stats to new client: success=${stats.success}, failure=${stats.failure}`);
+  send(ws, { type: 'ai_stats_update', success: stats.success, failure: stats.failure });
 
   ws.on('message', async (msg) => {
     let o = null;
@@ -1069,7 +1331,7 @@ wss.on('connection', (ws) => {
           if (o.geminiApiKey) {
             NoteManager.setSetting('gemini_api_key', o.geminiApiKey);
             aiService.apiKey = o.geminiApiKey;
-            send(ws, { type: 'reply', text: 'API key saved successfully!' });
+            send(ws, { type: 'reply', text: 'API key saved successfully for AI conversations!' });
           } else {
             send(ws, { type: 'reply', text: 'Invalid settings format.' });
           }
@@ -1082,6 +1344,12 @@ wss.on('connection', (ws) => {
             console.error('TTS error:', error);
             send(ws, { type: 'error', message: 'TTS failed' });
           }
+          break;
+        case 'reset_ai_stats':
+          AIStats.success = 0;
+          AIStats.failure = 0;
+          AIStats.broadcastStats();
+          send(ws, { type: 'reply', text: 'AI statistics reset successfully.' });
           break;
         default: send(ws, { type: 'reply', text: 'Unknown message type: ' + o.type });
       }

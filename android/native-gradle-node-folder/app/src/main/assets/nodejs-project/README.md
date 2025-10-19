@@ -79,20 +79,154 @@ Commands available when creating a sub-note:
 - `yes` - Create the sub-note
 - `no` - Cancel sub-note creation
 
+### 8. **AI Command Confirmation** (`mode: 'ai_command_confirmation'`)
+Commands available when AI proposes command sequences:
+- `yes` - Confirm and execute AI proposed commands
+- `no` - Cancel AI proposed commands
+- `/back` - Return to main menu
+
 ## State Transitions
 
 ```
 Initial → Find Context (via /findnote or /findbyid)
+Initial → AI Command Confirmation (via free text input)
 Find Context → Story Editing (via /editdescription)
 Find Context → AI Conversation (via /talkai)
 Find Context → Confirmation (via /delete, /markdone, /createsubnote)
 Story Editing → Find Context (via /stopediting)
 AI Conversation → Find Context (via /stop, exit, cancel)
 Confirmation → Find Context (via yes/no)
+AI Command Confirmation → Initial (via yes/no/back)
 Parameter Collection → Command Execution (via parameter input)
 ```
 
+## Key Features Implemented
+
+### 🤖 AI Agent Free Text Processing
+The application now supports natural language command processing using AI:
+
+#### **Free Text Detection**
+- Automatically detects non-slash input when in `initial` mode
+- Processes natural language requests like "create subnote milk under weekly shopping list"
+- No need to remember specific command syntax
+
+#### **AI Command Processing**
+- **Desktop/Development**: Uses local Ollama LLM for advanced natural language understanding
+- **Mobile/Production**: Falls back to intelligent keyword matching for common patterns
+- Analyzes available notes (ID + title only for efficiency)
+- Generates structured command sequences
+- Handles ambiguous requests with clarification
+- No API keys required - works completely offline
+
+#### **Confirmation Flow**
+- Always requires user confirmation (even with auto-confirm enabled)
+- Shows clear explanation of what AI understood
+- Lists proposed commands before execution
+- Allows cancellation with "no" or "/back"
+
+#### **Sequential Command Execution**
+- Executes proposed commands one by one
+- Provides status updates during execution
+- Returns to main menu after completion
+- Handles errors gracefully
+
+#### **Context Optimization**
+- Sends only note ID and title to minimize processing overhead
+- Supports up to 1000 notes efficiently
+- Filters out `/talkai` and `/uploadimage` commands
+- **Desktop**: Uses lightweight local model (llama3.2:1b) for fast responses
+- **Mobile**: Uses pattern-based keyword matching for instant responses
+
+### 📝 Example Usage Flow
+
+```
+User: "create subnote milk under weekly shopping list"
+  ↓
+AI: "I understand you want to:
+  1. Find note 'Weekly Shopping List' (ID: 3)
+  2. Create subnote 'Milk' under it
+  
+Do you want me to proceed? (yes/no)"
+  ↓
+User: "yes"
+  ↓
+System: "Executing: /findbyid 3"
+System: "Executing: /createsubnote Milk"
+System: "All commands executed. Returned to main menu."
+```
+
+### 🔧 Technical Implementation
+
+- **State Management**: Added `ai_command_confirmation` mode with proposed commands storage
+- **Error Handling**: Graceful fallback to regular commands if AI fails
+- **Hybrid AI Integration**: Ollama for desktop development, keyword matching for mobile
+- **Command Filtering**: Excludes problematic commands like `/talkai` and `/uploadimage`
+- **Back Navigation**: `/back` always available to return to main menu
+- **Mobile-Friendly**: Works on mobile devices without external dependencies
+- **No External Dependencies**: Runs completely offline
+
+## Ollama Setup (for AI Features)
+
+The AI agent features require Ollama to be installed and running:
+
+### 1. Install Ollama
+```bash
+# macOS
+brew install ollama
+
+# Linux/Windows - see https://ollama.ai/download
+```
+
+### 2. Start Ollama Service
+```bash
+# Start as service (recommended)
+brew services start ollama
+
+# Or run manually
+ollama serve
+```
+
+### 3. Pull Required Model
+```bash
+# Pull lightweight model (1.3GB)
+ollama pull llama3.2:1b
+```
+
+### 4. Verify Installation
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Should return model information
+```
+
+The AI agent will automatically use the local Ollama instance - no API keys required!
+
+## Mobile Deployment
+
+For mobile apps, the system automatically falls back to **intelligent keyword matching**:
+
+### ✅ **Supported Mobile Patterns:**
+- `"create note [title]"` → `/createnote [title]`
+- `"create subnote [title] under [parent]"` → `/findbyid [parent_id]` + `/createsubnote [title]`
+- `"find notes about [query]"` → `/findnote [query]`
+- `"search for [query]"` → `/findnote [query]`
+
+### 📱 **Mobile Benefits:**
+- **No Dependencies**: Works without Ollama or external APIs
+- **Fast Response**: Instant keyword matching
+- **Offline**: Completely offline operation
+- **Lightweight**: No large model files needed
+- **Battery Friendly**: Minimal CPU usage
+
+### 🔧 **How It Works:**
+1. **Desktop**: Tries Ollama first, falls back to keyword matching
+2. **Mobile**: Uses keyword matching directly (Ollama not available)
+3. **Pattern Recognition**: Matches common command patterns
+4. **Note Matching**: Finds relevant notes by title similarity
+
 Next steps
 
-- Wire real AI integration in `AIService.js` if you provide API credentials.
 - Add automated tests for `NoteManager`.
+- Consider adding more sophisticated prompt engineering for better command parsing.
+- Expand keyword matching patterns for more complex requests.

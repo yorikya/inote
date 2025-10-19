@@ -11,6 +11,7 @@ const StateManager = {
       },
       pendingConfirmation: null,
       parameterCollection: null,
+      aiCommandConfirmation: null,
     });
   },
   setAutoConfirm(ws, enabled) {

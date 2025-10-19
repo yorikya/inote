@@ -59,6 +59,50 @@
     </div>
 
     <div class="settings-section">
+      <h3>AI Action Statistics</h3>
+      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:16px; padding:12px; background:#1a1a1a; border-radius:6px;">
+          <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
+            <div style="font-size:24px; font-weight:bold; color:#4CAF50;" id="successCounter">0</div>
+            <div style="font-size:12px; color:#888;">Success</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:bold; color:#fff;">AI Actions Success Rate</div>
+            <div style="font-size:12px; color:#aaa;">Successful AI suggestions that user confirmed</div>
+          </div>
+        </div>
+        
+        <div style="display:flex; align-items:center; gap:16px; padding:12px; background:#1a1a1a; border-radius:6px;">
+          <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
+            <div style="font-size:24px; font-weight:bold; color:#ff6b35;" id="failureCounter">0</div>
+            <div style="font-size:12px; color:#888;">Failed</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:bold; color:#fff;">AI Actions Failure Rate</div>
+            <div style="font-size:12px; color:#aaa;">AI suggestions that didn't satisfy user requests</div>
+          </div>
+        </div>
+        
+        <div style="display:flex; align-items:center; gap:16px; padding:12px; background:#2a2f36; border-radius:6px;">
+          <div style="display:flex; flex-direction:column; align-items:center; min-width:80px;">
+            <div style="font-size:20px; font-weight:bold; color:#4CAF50;" id="successRate">0%</div>
+            <div style="font-size:12px; color:#888;">Rate</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:14px; font-weight:bold; color:#fff;">Overall Success Rate</div>
+            <div style="font-size:12px; color:#aaa;">Success / (Success + Failed)</div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button id="resetCounters" class="secondary" style="background:#ff6b35;">🔄 Reset Counters</button>
+        <button id="refreshStats" class="secondary" style="background:#4CAF50;">🔄 Refresh Stats</button>
+        <button id="downloadLogs" class="secondary" style="background:#2d5a87;">📥 Download Logs</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <h3>Debug Tools</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <button id="showNotes">Show Notes (Debug)</button>
@@ -149,6 +193,12 @@ const clearChatHistoryBtn = document.getElementById("clearChatHistory");
 const chatButton = document.getElementById("chatButton");
 const explorerButton = document.getElementById("explorerButton");
 const settingsButton = document.getElementById("settingsButton");
+const successCounter = document.getElementById("successCounter");
+const failureCounter = document.getElementById("failureCounter");
+const successRate = document.getElementById("successRate");
+const resetCounters = document.getElementById("resetCounters");
+const refreshStats = document.getElementById("refreshStats");
+const downloadLogs = document.getElementById("downloadLogs");
 
 langSel.onchange = () => {
   Settings.lang = langSel.value;
@@ -246,6 +296,92 @@ clearChatHistoryBtn.onclick = () => {
   }
 };
 
+// AI Action Statistics Management
+const AIStats = {
+  success: 0,
+  failure: 0,
+  
+  incrementSuccess: function() {
+    this.success++;
+    this.saveToStorage();
+    this.updateUI();
+    logger.info(`AI Action Success: ${this.success}`);
+  },
+  
+  incrementFailure: function() {
+    this.failure++;
+    this.saveToStorage();
+    this.updateUI();
+    logger.info(`AI Action Failure: ${this.failure}`);
+  },
+  
+  updateUI: function() {
+    if (successCounter) successCounter.textContent = this.success;
+    if (failureCounter) failureCounter.textContent = this.failure;
+    
+    const total = this.success + this.failure;
+    const rate = total > 0 ? Math.round((this.success / total) * 100) : 0;
+    if (successRate) successRate.textContent = `${rate}%`;
+  },
+  
+  saveToStorage: function() {
+    localStorage.setItem('aiStats', JSON.stringify({
+      success: this.success,
+      failure: this.failure
+    }));
+  },
+  
+  loadFromStorage: function() {
+    const saved = localStorage.getItem('aiStats');
+    if (saved) {
+      const data = JSON.parse(saved);
+      this.success = data.success || 0;
+      this.failure = data.failure || 0;
+    }
+    this.updateUI();
+  },
+  
+  reset: function() {
+    this.success = 0;
+    this.failure = 0;
+    this.saveToStorage();
+    this.updateUI();
+    // Send reset command to backend
+    sendToWorker({ type: 'reset_ai_stats' });
+  }
+};
+
+resetCounters.onclick = () => {
+  if (confirm("Are you sure you want to reset the AI action counters?")) {
+    AIStats.reset();
+  }
+};
+
+downloadLogs.onclick = () => {
+  // Download logs from the server
+  const link = document.createElement('a');
+  link.href = `http://localhost:30000/logs/download`;
+  link.download = 'app-logs.txt';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+refreshStats.onclick = () => {
+  // Fetch stats from server
+  fetch('http://localhost:30000/ai/stats')
+    .then(response => response.json())
+    .then(data => {
+      console.log('[AI_STATS] Fetched stats from server:', data);
+      AIStats.success = data.success || 0;
+      AIStats.failure = data.failure || 0;
+      AIStats.updateUI();
+    })
+    .catch(error => {
+      console.error('[AI_STATS] Error fetching stats:', error);
+    });
+};
+
 function sendToWorker(messageObject) {
     SharedWebSocket.send(messageObject);
 }
@@ -287,6 +423,24 @@ function initializeWebSocket() {
         Settings.autoConfirm = data.enabled;
         GlobalAutoConfirm.updateUI();
     });
+    
+    // AI Action Statistics handlers
+    SharedWebSocket.registerHandler('ai_action_success', (data) => {
+        console.log('[AI_STATS] Received ai_action_success:', data);
+        AIStats.incrementSuccess();
+    });
+    
+    SharedWebSocket.registerHandler('ai_action_failure', (data) => {
+        console.log('[AI_STATS] Received ai_action_failure:', data);
+        AIStats.incrementFailure();
+    });
+    
+    SharedWebSocket.registerHandler('ai_stats_update', (data) => {
+        console.log('[AI_STATS] Received ai_stats_update:', data);
+        AIStats.success = data.success || 0;
+        AIStats.failure = data.failure || 0;
+        AIStats.updateUI();
+    });
 }
 
 function updateConnectionStatus(state) {
@@ -317,6 +471,20 @@ function initializeSettings() {
   const key = localStorage.getItem('geminiApiKey');
   if (key) Settings.geminiApiKey = key;
   loadStoredApiKey();
+  AIStats.loadFromStorage();
+  
+  // Also fetch stats from server on page load
+  fetch('http://localhost:30000/ai/stats')
+    .then(response => response.json())
+    .then(data => {
+      console.log('[AI_STATS] Initial stats from server:', data);
+      AIStats.success = data.success || 0;
+      AIStats.failure = data.failure || 0;
+      AIStats.updateUI();
+    })
+    .catch(error => {
+      console.error('[AI_STATS] Error fetching initial stats:', error);
+    });
 }
 
 /* ---------- Page Load ---------- */
